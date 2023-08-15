@@ -14,12 +14,19 @@ impl<'a> Markdown<'a> {
     fn parse_components(input: &'a str) -> Vec<Component<'a>> {
         let mut components = Vec::new();
         for line in input.lines() {
-            if line.starts_with("# ") {
-                let title = line.trim_start_matches("# ");
-                components.push(Component::Heading1(title));
+            if let Some(component) = Markdown::parse_heading1(line) {
+                components.push(component);
             }
         }
         components
+    }
+    fn parse_heading1(line: &'a str) -> Option<Component<'a>> {
+        if line.starts_with("# ") {
+            let heading = line.trim_start_matches("# ");
+            Some(Component::Heading1(heading))
+        } else {
+            None
+        }
     }
 }
 
