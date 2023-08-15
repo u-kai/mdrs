@@ -35,7 +35,10 @@ impl<'a> Markdown<'a> {
             None
         }
     }
-    fn parse_heading1(line: &'a str) -> Option<Component<'a>> {
+    fn parse_heading1<'a>(lines: &mut Lines<'a>) -> Option<Component<'a>> {
+        let Some(line) = lines.next() else {
+            return None;
+        }
         if line.starts_with("# ") {
             let heading = line.trim_start_matches("# ");
             Some(Component::Heading1(heading))
@@ -62,43 +65,6 @@ impl<'a> List<'a> {
             items: Vec::new(),
             children: Vec::new(),
         }
-    }
-    fn parse(list: &mut Lines<'a>, indent: usize) -> Self {
-        let mut result = List::new();
-        let condition = format!("{}{}", " ".repeat(indent), "- ");
-        while let Some(line) = list.next() {
-            // 空行ではないかつlistでなければ終了
-            if !line.is_empty() && !line.contains("- ") {
-                break;
-            }
-            println!("indent : {} line: {}", indent, line);
-            // 同じインデントの場合は兄弟として追加
-            if line.starts_with(&condition) {
-                let list_str = line.trim_start_matches(&condition);
-                result.add(list_str);
-                continue;
-            }
-            // インデントが深くなった場合は子供として追加
-            let indent_num = line.chars().take_while(|c| c == &' ').count();
-            println!("indent: {}, indent_num: {}", indent, indent_num);
-            if indent < indent_num
-                && line.starts_with(&format!("{}{}", " ".repeat(indent_num), "- "))
-            {
-                let mut child = List::new();
-                child.add(line.trim_start_matches(&format!("{}{}", " ".repeat(indent_num), "- ")));
-                let rest = List::parse(list, indent_num);
-                let (items, children) = (rest.items, rest.children);
-                for item in items {
-                    child.add(item);
-                }
-                for rest_child in children {
-                    child.add_child(rest_child);
-                }
-                result.add_child(child);
-                continue;
-            }
-        }
-        result
     }
     fn add(&mut self, item: &'a str) {
         self.items.push(item);
@@ -144,12 +110,14 @@ mod tests {
     #[test]
     fn リストは階層構造を持つ() {
         let list = r#"
-- foo
-    - bar
+    - foo
+        - bar
+            - hoge"#;
 
-        - hoge"#;
-        let mut list = list.lines();
-        let sut = List::parse(&mut list, 0);
+        let sut = Markdown::parse(list);
+        let mut sut = sut.components();
+
+        let list_foo = sut.next().unwrap();
 
         let mut list = List::new();
         list.add("foo");
@@ -159,8 +127,7 @@ mod tests {
         grand_child.add("hoge");
         child.add_child(grand_child);
         list.add_child(child);
-
-        assert_eq!(sut, list);
+        assert_eq!(list_foo, &Component::List(list));
     }
     #[test]
     fn 文字列からタイトルをparseできる() {
