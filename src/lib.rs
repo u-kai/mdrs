@@ -1,13 +1,17 @@
 #[derive(Debug, PartialEq)]
-pub struct Markdown {}
+pub struct Markdown<'a> {
+    components: Vec<Component<'a>>,
+}
 
-impl Markdown {
-    pub fn parse<'a>(input: &'a str) -> Markdown {
-        Markdown {}
+impl<'a> Markdown<'a> {
+    pub fn parse(input: &'a str) -> Markdown {
+        Markdown {
+            components: vec![Component::Title(&input[2..])],
+        }
     }
 
-    pub fn components<'a>(&'a self) -> impl Iterator<Item = Component<'a>> {
-        vec![Component::Title("Hello World")].into_iter()
+    pub fn components(&'a self) -> impl Iterator<Item = &Component<'a>> {
+        self.components.iter()
     }
 }
 
@@ -26,6 +30,13 @@ mod tests {
 
         let result = sut.components().next().unwrap();
 
-        assert_eq!(result, Component::Title("Hello World"));
+        assert_eq!(result, &Component::Title("Hello World"));
+
+        let title = "# Good bye";
+        let sut = Markdown::parse(title);
+
+        let result = sut.components().next().unwrap();
+
+        assert_eq!(result, &Component::Title("Good bye"));
     }
 }
