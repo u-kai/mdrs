@@ -17,8 +17,19 @@ impl<'a> Markdown<'a> {
             if let Some(component) = Markdown::parse_heading1(line) {
                 components.push(component);
             }
+            if let Some(component) = Markdown::parse_list(line) {
+                components.push(component);
+            }
         }
         components
+    }
+    fn parse_list(line: &'a str) -> Option<Component<'a>> {
+        if line.starts_with("- ") {
+            let list = line.trim_start_matches("- ");
+            Some(Component::List(list))
+        } else {
+            None
+        }
     }
     fn parse_heading1(line: &'a str) -> Option<Component<'a>> {
         if line.starts_with("# ") {
@@ -33,6 +44,7 @@ impl<'a> Markdown<'a> {
 #[derive(Debug, PartialEq)]
 pub enum Component<'a> {
     Heading1(&'a str),
+    List(&'a str),
 }
 
 #[cfg(test)]
@@ -45,10 +57,24 @@ mod tests {
 - bar
 "#;
         let sut = Markdown::parse(title);
+        let mut sut = sut.components();
 
-        let title = sut.components().next().unwrap();
+        let heading = sut.next().unwrap();
 
-        assert_eq!(title, &Component::Heading1("Hello World"));
+        assert_eq!(heading, &Component::Heading1("Hello World"));
+
+        let list_foo = sut.next().unwrap();
+        assert_eq!(list_foo, &Component::List("foo"));
+    }
+    #[test]
+    fn 文字列からリストをparseできる() {
+        let list = r#"- foo"#;
+        let sut = Markdown::parse(list);
+        let mut sut = sut.components();
+
+        let list_foo = sut.next().unwrap();
+
+        assert_eq!(list_foo, &Component::List("foo"));
     }
     #[test]
     fn 文字列からタイトルをparseできる() {
