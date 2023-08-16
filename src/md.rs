@@ -191,32 +191,39 @@ impl<'a> Item<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //#[test]
-    //fn 複数の行をparseできる() {
-    //    let mut lines = String::new();
-    //    lines.push_str("# Hello World\n");
-    //    lines.push_str("- foo\n");
-    //    lines.push_str("\n");
-    //    lines.push_str("    - bar\n");
-    //    lines.push_str("# Good Bye\n");
+    #[test]
+    fn 複数の行をparseできる() {
+        let mut lines = String::new();
+        lines.push_str("# Hello World\n");
+        lines.push_str("- foo\n");
+        lines.push_str("\n");
+        lines.push_str("    - bar\n");
+        lines.push_str("# Good Bye\n");
+        lines.push_str("- hoge\n");
 
-    //    let sut = Markdown::parse(&lines);
-    //    let mut sut = sut.components();
+        let sut = Markdown::parse(&lines);
+        let mut sut = sut.components();
 
-    //    let heading = sut.next().unwrap();
-    //    assert_eq!(heading, &Component::Heading1("Hello World"));
+        let heading = sut.next().unwrap();
+        assert_eq!(heading, &Component::Heading1("Hello World"));
 
-    //    let list_foo = sut.next().unwrap();
-    //    let mut list = List::new();
-    //    list.add("foo");
-    //    let mut bar = List::new();
-    //    bar.add("bar");
-    //    list.add_child(bar);
-    //    assert_eq!(list_foo, &Component::List(list));
+        let list_foo = sut.next().unwrap();
+        let mut list = Item::new("foo");
+        list.add_child(Item::new("bar"));
 
-    //    let heading = sut.next().unwrap();
-    //    assert_eq!(heading, &Component::Heading1("Good Bye"));
-    //}
+        let mut expected = ItemList::new();
+        expected.add(list);
+        assert_eq!(list_foo, &Component::List(expected));
+
+        let heading = sut.next().unwrap();
+        assert_eq!(heading, &Component::Heading1("Good Bye"));
+
+        let list_hoge = sut.next().unwrap();
+        let mut list = Item::new("hoge");
+        let mut expected = ItemList::new();
+        expected.add(list);
+        assert_eq!(list_hoge, &Component::List(expected));
+    }
 
     // Only List tests
     mod list_test {
