@@ -1,4 +1,5 @@
 use std::iter::Peekable;
+use std::slice::Split;
 use std::str::Lines;
 
 #[derive(Debug, PartialEq)]
@@ -60,26 +61,26 @@ impl<'a> Markdown<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Component<'a> {
     Text(Text<'a>),
     List(ItemList<'a>),
     SplitLine,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ItemList<'a> {
     items: Vec<Item<'a>>,
 }
 impl<'a> ItemList<'a> {
     const MARKS: [&'static str; 2] = ["- ", "* "];
+    pub fn items(&'a self) -> impl Iterator<Item = &'a Item<'a>> {
+        self.items.iter()
+    }
     fn new() -> ItemList<'a> {
         ItemList { items: Vec::new() }
     }
     fn add(&mut self, item: Item<'a>) {
-        self.items.push(item);
-    }
-    fn add_h1(&mut self, item: Item<'a>) {
         self.items.push(item);
     }
     fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
@@ -169,12 +170,18 @@ impl<'a> ItemList<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Item<'a> {
     value: Text<'a>,
     children: ItemList<'a>,
 }
 impl<'a> Item<'a> {
+    pub fn children(&'a self) -> &ItemList<'a> {
+        &self.children
+    }
+    pub fn value(&self) -> &str {
+        self.value.value()
+    }
     fn new(value: &'a str) -> Self {
         Item {
             value: Text::parse(value),
@@ -186,7 +193,7 @@ impl<'a> Item<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Text<'a> {
     H1(&'a str),
     H2(&'a str),
@@ -194,6 +201,14 @@ pub enum Text<'a> {
     Normal(&'a str),
 }
 impl Text<'_> {
+    pub fn value(&self) -> &str {
+        match self {
+            Text::H1(value) => value,
+            Text::H2(value) => value,
+            Text::H3(value) => value,
+            Text::Normal(value) => value,
+        }
+    }
     fn parse(line: &str) -> Text {
         if line.starts_with("# ") {
             return Text::H1(&line[2..]);
