@@ -43,7 +43,7 @@ impl<'a> Markdown<'a> {
         line.is_empty()
     }
     fn parse_list(lines: &mut Peekable<Lines<'a>>) -> Option<Component<'a>> {
-        let list = List::parse(lines, 0);
+        let list = ItemList::parse(lines, 0);
         if list.item_len() > 0 {
             Some(Component::List(list))
         } else {
@@ -63,7 +63,7 @@ impl<'a> Markdown<'a> {
 #[derive(Debug, PartialEq)]
 pub enum Component<'a> {
     Heading1(&'a str),
-    List(List<'a>),
+    List(ItemList<'a>),
 }
 impl Component<'_> {
     fn from_line(line: &str) -> Component {
@@ -188,97 +188,6 @@ impl<'a> Item<'a> {
     }
     fn add_child(&mut self, item: Self) {
         self.children.add(item);
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct List<'a> {
-    items: Vec<&'a str>,
-    children: Vec<List<'a>>,
-}
-impl<'a> List<'a> {
-    // todo マークの種類を増やす
-    const MARKS: &'static [&'static str] = &["- ", "* "];
-    fn new() -> List<'a> {
-        List {
-            items: Vec::new(),
-            children: Vec::new(),
-        }
-    }
-    fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
-        let mut result = List::new();
-        while let Some(line) = lines.peek() {
-            if Self::is_skip(line) {
-                let _ = lines.next().unwrap();
-                continue;
-            }
-            if Self::is_end_loop(line) {
-                return result;
-            }
-            // インデントが同じ場合は同じ階層として追加
-            if Self::is_item_line(line, indent) {
-                let line = lines.next().unwrap();
-                result.add(Self::get_item_from_line(line, indent));
-                continue;
-            }
-
-            let indent_count = Self::indent_count(line);
-
-            // 自分より上位のインデントの場合は終了
-            if indent_count < indent {
-                return result;
-            }
-            // インデントが深くなった場合は子供として追加
-            if indent < Self::indent_count(line) && Self::is_item_line(line, indent_count) {
-                let mut child = List::new();
-                let line = lines.next().unwrap();
-                child.add(Self::get_item_from_line(line, indent_count));
-                let rest = List::parse(lines, indent_count);
-                child.concat(rest);
-                result.add_child(child);
-                continue;
-            }
-        }
-        result
-    }
-    fn item_len(&self) -> usize {
-        self.items.len()
-    }
-    fn is_item_line(line: &str, indent: usize) -> bool {
-        line.starts_with(&Self::start_condition(indent))
-    }
-    fn indent_count(line: &str) -> usize {
-        line.chars().take_while(|c| c == &' ').count()
-    }
-    fn is_skip(line: &str) -> bool {
-        // 空行ではないかつマークが含まれていない場合は終了
-        line.is_empty()
-    }
-    fn is_end_loop(line: &str) -> bool {
-        // 空行ではないかつマークが含まれていない場合は終了
-        !line.is_empty() && !Self::MARKS.iter().any(|mark| line.contains(mark))
-    }
-    fn start_condition(indent: usize) -> String {
-        format!("{}{}", " ".repeat(indent), "- ")
-    }
-    fn get_item_from_line(line: &'a str, indent: usize) -> &'a str {
-        let condition = Self::start_condition(indent);
-        line.trim_start_matches(&condition)
-    }
-    fn concat(&mut self, other: Self) {
-        let (items, children) = (other.items, other.children);
-        for item in items {
-            self.add(item);
-        }
-        for rest_child in children {
-            self.add_child(rest_child);
-        }
-    }
-    fn add(&mut self, item: &'a str) {
-        self.items.push(item);
-    }
-    fn add_child(&mut self, child: List<'a>) {
-        self.children.push(child);
     }
 }
 
