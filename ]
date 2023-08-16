@@ -25,12 +25,16 @@ impl<'a> Markdown<'a> {
                 let _ = lines.next().unwrap();
                 continue;
             }
+            if let Some(component) = Markdown::parse_heading1(line) {
+                components.push(component);
+                // consume line
+                let _ = lines.next().unwrap();
+                continue;
+            }
             if let Some(component) = Markdown::parse_list(&mut lines) {
                 components.push(component);
                 continue;
             }
-            let line = lines.next().unwrap();
-            components.push(Markdown::parse_text(line));
         }
 
         components
@@ -46,15 +50,25 @@ impl<'a> Markdown<'a> {
             None
         }
     }
-    fn parse_text(line: &'a str) -> Component<'a> {
-        Component::Text(Text::parse(line))
+    fn parse_heading1(line: &'a str) -> Option<Component<'a>> {
+        if line.starts_with("# ") {
+            let heading = line.trim_start_matches("# ");
+            Some(Component::Text(heading))
+        } else {
+            None
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Component<'a> {
-    Text(Text<'a>),
+    Text(&'a str),
     List(ItemList<'a>),
+}
+impl Component<'_> {
+    fn from_line(line: &str) -> Component {
+        Component::Text(line)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -214,7 +228,7 @@ mod tests {
         let mut sut = sut.components();
 
         let heading = sut.next().unwrap();
-        assert_eq!(heading, &Component::Text(Text::H1("Hello World")));
+        assert_eq!(heading, &Component::Text("Hello World"));
 
         let list_foo = sut.next().unwrap();
         let mut list = Item::new("foo");
@@ -225,7 +239,7 @@ mod tests {
         assert_eq!(list_foo, &Component::List(expected));
 
         let heading = sut.next().unwrap();
-        assert_eq!(heading, &Component::Text(Text::H1("Good Bye")));
+        assert_eq!(heading, &Component::Text("Good Bye"));
 
         let list_hoge = sut.next().unwrap();
         let mut list = Item::new("hoge");
@@ -246,7 +260,7 @@ mod tests {
             let mut expected = ItemList::new();
             expected.add(Item::new("# foo"));
 
-            assert_eq!(sut.items[0].value, Text::H1("foo"));
+            assert_eq!(expected.items[0].value, Text::H1("foo"));
             assert_eq!(sut, expected);
         }
         #[test]
@@ -345,14 +359,14 @@ mod tests {
 
         let result = sut.components().next().unwrap();
 
-        assert_eq!(result, &Component::Text(Text::H1("Hello World")));
+        assert_eq!(result, &Component::Text("Hello World"));
 
         let title = "# Good bye";
         let sut = Markdown::parse(title);
 
         let result = sut.components().next().unwrap();
 
-        assert_eq!(result, &Component::Text(Text::H1("Good bye")));
+        assert_eq!(result, &Component::Text("Good bye"));
     }
     #[test]
     fn lines_learning_test() {
