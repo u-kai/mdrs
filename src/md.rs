@@ -188,6 +188,26 @@ impl<'a> Item<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Heading<'a> {
+    H1(&'a str),
+    H2(&'a str),
+    H3(&'a str),
+    None(&'a str),
+}
+impl Heading<'_> {
+    fn parse(line: &str) -> Heading {
+        if line.starts_with("# ") {
+            Heading::H1(&line[2..])
+        } else if line.starts_with("## ") {
+            Heading::H2(&line[3..])
+        } else if line.starts_with("### ") {
+            Heading::H3(&line[4..])
+        } else {
+            Heading::None(line)
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,6 +318,16 @@ mod tests {
             expected.add(Item::new("foo"));
 
             assert_eq!(sut, expected);
+        }
+    }
+    mod heading_tests {
+        use super::*;
+        #[test]
+        fn 文字列からタイトルをparseできる() {
+            let title = "# Hello World";
+            let result = Heading::parse(title);
+
+            assert_eq!(result, Heading::H1("Hello World"));
         }
     }
     #[test]
