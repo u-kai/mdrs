@@ -104,9 +104,8 @@ impl<'a> ItemList<'a> {
                 continue;
             }
 
-            let indent_count = Self::indent_count(line);
-            // 自分より親のインデントの場合は終了
-            if indent_count < indent {
+            // 自分より親のインデントの場合はlineを消費せずに終了
+            if Self::indent_count(line) < indent {
                 return result;
             }
         }
@@ -121,19 +120,19 @@ impl<'a> ItemList<'a> {
             if Self::is_end_loop(line) {
                 return None;
             }
-            // インデントが同じ場合はNone
+            // インデントが同じ場合はlineを消費せずにNoneを返す
             if Self::is_item_line(line, indent) {
                 return None;
             }
 
             let indent_count = Self::indent_count(line);
 
-            // 自分より上位のインデントの場合は終了
+            // 自分より上位のインデントの場合はlineを消費せずにNoneを返す
             if indent_count < indent {
                 return None;
             }
             // インデントが深くなった場合は子供として追加
-            if indent < Self::indent_count(line) && Self::is_item_line(line, indent_count) {
+            if indent < indent_count && Self::is_item_line(line, indent_count) {
                 let line = lines.next().unwrap();
                 let mut child = Self::get_item_from_line(line, indent_count);
                 if let Some(grand_child) = Self::get_children_from_line(lines, indent_count) {
