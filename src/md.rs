@@ -25,10 +25,19 @@ impl<'a> Markdown<'a> {
                 let _ = lines.next().unwrap();
                 continue;
             }
+
+            if let Some(_split_line) = SplitLine::parse(line) {
+                components.push(Component::SplitLine);
+                // consume line
+                let _ = lines.next().unwrap();
+                continue;
+            }
+
             if let Some(component) = Markdown::parse_list(&mut lines) {
                 components.push(component);
                 continue;
             }
+            // それ以外の場合はテキストとして追加
             let line = lines.next().unwrap();
             components.push(Markdown::parse_text(line));
         }
@@ -55,6 +64,7 @@ impl<'a> Markdown<'a> {
 pub enum Component<'a> {
     Text(Text<'a>),
     List(ItemList<'a>),
+    SplitLine,
 }
 
 #[derive(Debug, PartialEq)]
@@ -212,6 +222,7 @@ mod tests {
         lines.push_str("- foo\n");
         lines.push_str("\n");
         lines.push_str("    - bar\n");
+        lines.push_str("---\n");
         lines.push_str("# Good Bye\n");
         lines.push_str("- hoge\n");
 
@@ -224,18 +235,19 @@ mod tests {
         let list_foo = sut.next().unwrap();
         let mut list = Item::new("foo");
         list.add_child(Item::new("bar"));
-
         let mut expected = ItemList::new();
         expected.add(list);
         assert_eq!(list_foo, &Component::List(expected));
+
+        let split = sut.next().unwrap();
+        assert_eq!(split, &Component::SplitLine);
 
         let heading = sut.next().unwrap();
         assert_eq!(heading, &Component::Text(Text::H1("Good Bye")));
 
         let list_hoge = sut.next().unwrap();
-        let mut list = Item::new("hoge");
         let mut expected = ItemList::new();
-        expected.add(list);
+        expected.add(Item::new("hoge"));
         assert_eq!(list_hoge, &Component::List(expected));
     }
 
@@ -288,13 +300,10 @@ mod tests {
             let sut = ItemList::parse(&mut list, 0);
 
             let grand_child = Item::new("hoge");
-
             let mut child = Item::new("bar");
             child.add_child(grand_child);
-
             let mut foo = Item::new("foo");
             foo.add_child(child);
-
             let mut chome = Item::new("chome");
             chome.add_child(Item::new("chome_child"));
             let mut expected = ItemList::new();
