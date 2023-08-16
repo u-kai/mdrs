@@ -155,7 +155,7 @@ impl<'a> ItemList<'a> {
         line.chars().take_while(|c| c == &' ').count()
     }
     fn is_skip(line: &str) -> bool {
-        // 空行ではないかつマークが含まれていない場合は終了
+        // 空行の場合はスキップ
         line.is_empty()
     }
     fn is_end_loop(line: &str) -> bool {
@@ -168,9 +168,6 @@ impl<'a> ItemList<'a> {
     fn get_item_from_line(line: &'a str, indent: usize) -> Item<'a> {
         let condition = Self::start_condition(indent);
         Item::new(line.trim_start_matches(&condition))
-    }
-    fn concat(&mut self, other: Self) {
-        self.items.extend(other.items);
     }
 }
 
@@ -224,62 +221,38 @@ mod tests {
     // Only List tests
     mod list_test {
         use super::*;
-        // #[test]
-        //        fn リスト以外の文字列までparseする() {
-        //            let mut list = String::new();
-        //            list.push_str("- foo\n");
-        //            list.push_str("    - bar\n");
-        //            list.push_str("         - hoge\n");
-        //            list.push_str("\n");
-        //            list.push_str("- chome");
-        //            list.push_str(" - chome_child");
-        //            list.push_str("# End of list");
-        //            list.push_str("- foo\n");
-        //
-        //            let mut list = list.lines().peekable();
-        //
-        //            let sut = List::parse(&mut list, 0);
-        //
-        //            let mut grand_child = List::new();
-        //            grand_child.add("hoge");
-        //
-        //            let mut child = List::new();
-        //            child.add("bar");
-        //            child.add_child(grand_child);
-        //
-        //            let mut list = List::new();
-        //            list.add("foo");
-        //            list.add("chome");
-        //            list.add_child(child);
-        //
-        //            assert_eq!(sut, list);
-        //        }
-        //#[test]
-        //fn リストは階層構造を持つ() {
-        //    let mut list = String::new();
-        //    list.push_str("- foo\n");
-        //    list.push_str("    - bar\n");
-        //    list.push_str("         - hoge\n");
-        //    list.push_str("\n");
-        //    list.push_str("- chome");
-        //    let mut list = list.lines().peekable();
+        #[test]
+        fn リスト以外の文字列までparseする() {
+            let mut list = String::new();
+            list.push_str("- foo\n");
+            list.push_str("    - bar\n");
+            list.push_str("         - hoge\n");
+            list.push_str("\n");
+            list.push_str("- chome\n");
+            list.push_str(" - chome_child\n");
+            list.push_str("# End of list\n");
+            list.push_str("- foo\n");
 
-        //    let sut = List::parse(&mut list, 0);
+            let mut list = list.lines().peekable();
 
-        //    let mut grand_child = List::new();
-        //    grand_child.add("hoge");
+            let sut = ItemList::parse(&mut list, 0);
 
-        //    let mut child = List::new();
-        //    child.add("bar");
-        //    child.add_child(grand_child);
+            let grand_child = Item::new("hoge");
 
-        //    let mut list = List::new();
-        //    list.add("foo");
-        //    list.add("chome");
-        //    list.add_child(child);
+            let mut child = Item::new("bar");
+            child.add_child(grand_child);
 
-        //    assert_eq!(sut, list);
-        //}
+            let mut foo = Item::new("foo");
+            foo.add_child(child);
+
+            let mut chome = Item::new("chome");
+            chome.add_child(Item::new("chome_child"));
+            let mut expected = ItemList::new();
+            expected.add(foo);
+            expected.add(chome);
+
+            assert_eq!(sut, expected);
+        }
         #[test]
         fn リストは階層構造を持つ() {
             let mut list = String::new();
