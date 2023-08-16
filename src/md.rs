@@ -20,9 +20,15 @@ impl<'a> Markdown<'a> {
         let mut lines = input.lines().peekable();
 
         while let Some(line) = lines.peek() {
+            if Markdown::is_skip(line) {
+                // consume line
+                let _ = lines.next().unwrap();
+                continue;
+            }
             if let Some(component) = Markdown::parse_heading1(line) {
                 components.push(component);
-                lines.next().unwrap();
+                // consume line
+                let _ = lines.next().unwrap();
                 continue;
             }
             if let Some(component) = Markdown::parse_list(&mut lines) {
@@ -32,6 +38,9 @@ impl<'a> Markdown<'a> {
         }
 
         components
+    }
+    fn is_skip(line: &str) -> bool {
+        line.is_empty()
     }
     fn parse_list(lines: &mut Peekable<Lines<'a>>) -> Option<Component<'a>> {
         let list = List::parse(lines, 0);
@@ -157,31 +166,31 @@ impl<'a> List<'a> {
 mod tests {
     use super::*;
     #[test]
-    //    fn 複数の行をparseできる() {
-    //        let title = r#"# Hello World
-    //- foo
-    //
-    //    - bar
-    //# Good Bye
-    //"#;
-    //        let sut = Markdown::parse(title);
-    //        let mut sut = sut.components();
-    //
-    //        let heading = sut.next().unwrap();
-    //
-    //        assert_eq!(heading, &Component::Heading1("Hello World"));
-    //
-    //        let list_foo = sut.next().unwrap();
-    //        let mut list = List::new();
-    //        list.add("foo");
-    //        let mut bar = List::new();
-    //        bar.add("bar");
-    //        list.add_child(bar);
-    //        assert_eq!(list_foo, &Component::List(list));
-    //
-    //        let heading = sut.next().unwrap();
-    //        assert_eq!(heading, &Component::Heading1("Good Bye"));
-    //    }
+    fn 複数の行をparseできる() {
+        let mut lines = String::new();
+        lines.push_str("# Hello World\n");
+        lines.push_str("- foo\n");
+        lines.push_str("\n");
+        lines.push_str("    - bar\n");
+        lines.push_str("# Good Bye\n");
+
+        let sut = Markdown::parse(&lines);
+        let mut sut = sut.components();
+
+        let heading = sut.next().unwrap();
+        assert_eq!(heading, &Component::Heading1("Hello World"));
+
+        let list_foo = sut.next().unwrap();
+        let mut list = List::new();
+        list.add("foo");
+        let mut bar = List::new();
+        bar.add("bar");
+        list.add_child(bar);
+        assert_eq!(list_foo, &Component::List(list));
+
+        let heading = sut.next().unwrap();
+        assert_eq!(heading, &Component::Heading1("Good Bye"));
+    }
     #[test]
     fn 文字列からリストをparseできる() {
         let list = r#"- foo"#;
