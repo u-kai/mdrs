@@ -187,14 +187,19 @@ pub enum Text<'a> {
 impl Text<'_> {
     fn parse(line: &str) -> Text {
         if line.starts_with("# ") {
-            Text::H1(&line[2..])
-        } else if line.starts_with("## ") {
-            Text::H2(&line[3..])
-        } else if line.starts_with("### ") {
-            Text::H3(&line[4..])
-        } else {
-            Text::Normal(line)
+            return Text::H1(&line[2..]);
         }
+        if line.starts_with("## ") {
+            return Text::H2(&line[3..]);
+        }
+        if line.starts_with("### ") {
+            return Text::H3(&line[4..]);
+        }
+        let hash_count = line.chars().take_while(|c| c == &'#').count();
+        if hash_count > 3 && &line[hash_count..hash_count + 1] == " " {
+            return Text::H3(&line[hash_count + 1..]);
+        }
+        Text::Normal(line)
     }
 }
 #[cfg(test)]
@@ -232,6 +237,23 @@ mod tests {
         let mut expected = ItemList::new();
         expected.add(list);
         assert_eq!(list_hoge, &Component::List(expected));
+    }
+
+    #[test]
+    fn 文字列からタイトルをparseできる() {
+        let title = "# Hello World";
+        let sut = Markdown::parse(title);
+
+        let result = sut.components().next().unwrap();
+
+        assert_eq!(result, &Component::Text(Text::H1("Hello World")));
+
+        let title = "# Good bye";
+        let sut = Markdown::parse(title);
+
+        let result = sut.components().next().unwrap();
+
+        assert_eq!(result, &Component::Text(Text::H1("Good bye")));
     }
 
     // Only List tests
@@ -337,33 +359,56 @@ mod tests {
 
             assert_eq!(result, Text::H1("Hello World"));
         }
+        #[test]
+        fn 文字列からh2をparseできる() {
+            let title = "## Hello World";
+            let result = Text::parse(title);
+
+            assert_eq!(result, Text::H2("Hello World"));
+        }
+        #[test]
+        fn 文字列からマークが3以上はh3としてparseできる() {
+            let title = "#### Hello World";
+            let result = Text::parse(title);
+
+            assert_eq!(result, Text::H3("Hello World"));
+        }
     }
-    #[test]
-    fn 文字列からタイトルをparseできる() {
-        let title = "# Hello World";
-        let sut = Markdown::parse(title);
+    mod split_tests {
+        use super::*;
 
-        let result = sut.components().next().unwrap();
+        #[test]
+        fn splitをparseできる() {
+            let split = "---";
+            let result = SplitLine::parse(split);
+            assert_eq!(result, Some(SplitLine))
+        }
+        #[test]
+        fn 改行されるsplitをparseできる() {
+            let split = "---\n";
+            let result = SplitLine::parse(split);
+            assert_eq!(result, Some(SplitLine))
+        }
+        #[test]
+        fn splitは文字列に変換できる() {
+            let sut = SplitLine::parse("---").unwrap();
 
-        assert_eq!(result, &Component::Text(Text::H1("Hello World")));
-
-        let title = "# Good bye";
-        let sut = Markdown::parse(title);
-
-        let result = sut.components().next().unwrap();
-
-        assert_eq!(result, &Component::Text(Text::H1("Good bye")));
+            assert_eq!(sut.to_str(), "---");
+        }
     }
-    #[test]
-    fn lines_learning_test() {
-        let lines = r#"
-- foo"#;
-        let mut lines = lines.lines();
-        let first = lines.next().unwrap();
-        assert_eq!(first, "");
-        let second = lines.next().unwrap();
-        assert_eq!(second, "- foo");
-        let third = lines.next();
-        assert_eq!(third, None);
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SplitLine;
+impl SplitLine {
+    fn parse(line: &str) -> Option<Self> {
+        if line == "---" || line == "***" || line == "---\n" || line == "***\n" {
+            Some(SplitLine)
+        } else {
+            None
+        }
+    }
+    fn to_str(&self) -> &str {
+        "---"
     }
 }
