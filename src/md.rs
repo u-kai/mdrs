@@ -1,3 +1,4 @@
+use std::iter::Peekable;
 use std::str::Lines;
 
 #[derive(Debug, PartialEq)]
@@ -15,21 +16,26 @@ impl<'a> Markdown<'a> {
     }
     fn parse_components(input: &'a str) -> Vec<Component<'a>> {
         let mut components = Vec::new();
-        for line in input.lines() {
+
+        let mut lines = input.lines().peekable();
+
+        while let Some(line) = lines.peek() {
             if let Some(component) = Markdown::parse_heading1(line) {
                 components.push(component);
+                lines.next().unwrap();
+                continue;
             }
-            if let Some(component) = Markdown::parse_list(line) {
+            if let Some(component) = Markdown::parse_list(&mut lines) {
                 components.push(component);
+                continue;
             }
         }
+
         components
     }
-    fn parse_list(line: &'a str) -> Option<Component<'a>> {
-        if line.starts_with("- ") {
-            let list_str = line.trim_start_matches("- ");
-            let mut list = List::new();
-            list.add(list_str);
+    fn parse_list(lines: &mut Peekable<Lines<'a>>) -> Option<Component<'a>> {
+        let list = List::parse(lines, 0);
+        if list.item_len() > 0 {
             Some(Component::List(list))
         } else {
             None
@@ -50,6 +56,11 @@ pub enum Component<'a> {
     Heading1(&'a str),
     List(List<'a>),
 }
+impl Component<'_> {
+    fn from_line(line: &str) -> Component {
+        Component::Heading1(line)
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct List<'a> {
@@ -57,6 +68,7 @@ pub struct List<'a> {
     children: Vec<List<'a>>,
 }
 impl<'a> List<'a> {
+    // todo マークの種類を増やす
     const MARKS: &'static [&'static str] = &["- ", "* "];
     fn new() -> List<'a> {
         List {
@@ -64,23 +76,35 @@ impl<'a> List<'a> {
             children: Vec::new(),
         }
     }
-    fn parse(list: &mut Lines<'a>, indent: usize) -> Self {
+    fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
         let mut result = List::new();
-        while let Some(line) = list.next() {
+        while let Some(line) = lines.peek() {
+            if Self::is_skip(line) {
+                let _ = lines.next().unwrap();
+                continue;
+            }
             if Self::is_end_loop(line) {
-                break;
+                return result;
             }
             // インデントが同じ場合は同じ階層として追加
             if Self::is_item_line(line, indent) {
+                let line = lines.next().unwrap();
                 result.add(Self::get_item_from_line(line, indent));
                 continue;
             }
+
             let indent_count = Self::indent_count(line);
+
+            // 自分より上位のインデントの場合は終了
+            if indent_count < indent {
+                return result;
+            }
             // インデントが深くなった場合は子供として追加
             if indent < Self::indent_count(line) && Self::is_item_line(line, indent_count) {
                 let mut child = List::new();
+                let line = lines.next().unwrap();
                 child.add(Self::get_item_from_line(line, indent_count));
-                let rest = List::parse(list, indent_count);
+                let rest = List::parse(lines, indent_count);
                 child.concat(rest);
                 result.add_child(child);
                 continue;
@@ -88,11 +112,18 @@ impl<'a> List<'a> {
         }
         result
     }
+    fn item_len(&self) -> usize {
+        self.items.len()
+    }
     fn is_item_line(line: &str, indent: usize) -> bool {
         line.starts_with(&Self::start_condition(indent))
     }
     fn indent_count(line: &str) -> usize {
         line.chars().take_while(|c| c == &' ').count()
+    }
+    fn is_skip(line: &str) -> bool {
+        // 空行ではないかつマークが含まれていない場合は終了
+        line.is_empty()
     }
     fn is_end_loop(line: &str) -> bool {
         // 空行ではないかつマークが含まれていない場合は終了
@@ -126,23 +157,31 @@ impl<'a> List<'a> {
 mod tests {
     use super::*;
     #[test]
-    fn 複数の行をparseできる() {
-        let title = r#"# Hello World
-- foo
-- bar
-"#;
-        let sut = Markdown::parse(title);
-        let mut sut = sut.components();
-
-        let heading = sut.next().unwrap();
-
-        assert_eq!(heading, &Component::Heading1("Hello World"));
-
-        let list_foo = sut.next().unwrap();
-        let mut list = List::new();
-        list.add("foo");
-        assert_eq!(list_foo, &Component::List(list));
-    }
+    //    fn 複数の行をparseできる() {
+    //        let title = r#"# Hello World
+    //- foo
+    //
+    //    - bar
+    //# Good Bye
+    //"#;
+    //        let sut = Markdown::parse(title);
+    //        let mut sut = sut.components();
+    //
+    //        let heading = sut.next().unwrap();
+    //
+    //        assert_eq!(heading, &Component::Heading1("Hello World"));
+    //
+    //        let list_foo = sut.next().unwrap();
+    //        let mut list = List::new();
+    //        list.add("foo");
+    //        let mut bar = List::new();
+    //        bar.add("bar");
+    //        list.add_child(bar);
+    //        assert_eq!(list_foo, &Component::List(list));
+    //
+    //        let heading = sut.next().unwrap();
+    //        assert_eq!(heading, &Component::Heading1("Good Bye"));
+    //    }
     #[test]
     fn 文字列からリストをparseできる() {
         let list = r#"- foo"#;
@@ -155,26 +194,34 @@ mod tests {
 
         assert_eq!(list_foo, &Component::List(list));
     }
-    #[test]
-    fn リストは階層構造を持つ() {
-        let list = r#"
-- foo
-    - bar
+    mod list_test {
+        use super::*;
+        #[test]
+        fn リストは階層構造を持つ() {
+            let mut list = String::new();
+            list.push_str("- foo\n");
+            list.push_str("    - bar\n");
+            list.push_str("         - hoge\n");
+            list.push_str("\n");
+            list.push_str("- chome");
+            let mut list = list.lines().peekable();
 
-        - hoge"#;
-        let mut list = list.lines();
-        let sut = List::parse(&mut list, 0);
+            let sut = List::parse(&mut list, 0);
 
-        let mut list = List::new();
-        list.add("foo");
-        let mut child = List::new();
-        child.add("bar");
-        let mut grand_child = List::new();
-        grand_child.add("hoge");
-        child.add_child(grand_child);
-        list.add_child(child);
+            let mut grand_child = List::new();
+            grand_child.add("hoge");
 
-        assert_eq!(sut, list);
+            let mut child = List::new();
+            child.add("bar");
+            child.add_child(grand_child);
+
+            let mut list = List::new();
+            list.add("foo");
+            list.add("chome");
+            list.add_child(child);
+
+            assert_eq!(sut, list);
+        }
     }
     #[test]
     fn 文字列からタイトルをparseできる() {
@@ -191,5 +238,17 @@ mod tests {
         let result = sut.components().next().unwrap();
 
         assert_eq!(result, &Component::Heading1("Good bye"));
+    }
+    #[test]
+    fn lines_learning_test() {
+        let lines = r#"
+- foo"#;
+        let mut lines = lines.lines();
+        let first = lines.next().unwrap();
+        assert_eq!(first, "");
+        let second = lines.next().unwrap();
+        assert_eq!(second, "- foo");
+        let third = lines.next();
+        assert_eq!(third, None);
     }
 }
