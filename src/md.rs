@@ -88,7 +88,7 @@ pub enum Component<'a> {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ItemList<'a> {
-    items: Vec<Item<'a>>,
+    pub(crate) items: Vec<Item<'a>>,
 }
 impl<'a> ItemList<'a> {
     const MARKS: [&'static str; 2] = ["- ", "* "];
@@ -190,8 +190,8 @@ impl<'a> ItemList<'a> {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Item<'a> {
-    value: Text<'a>,
-    children: ItemList<'a>,
+    pub(crate) value: Text<'a>,
+    pub(crate) children: ItemList<'a>,
 }
 impl<'a> Item<'a> {
     pub fn children(&'a self) -> &ItemList<'a> {

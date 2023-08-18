@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::md::{Component, Markdown, Page, Text};
+use crate::md::{Component, ItemList, Markdown, Page, Text};
 
 //fn page_to_slide(page: Vec<Component>) -> Slide {
 //    let mut result = Slide::blank();
@@ -121,6 +121,26 @@ pub struct Content {
 }
 
 impl Content {
+    fn from_component(component: &Component<'_>) -> Vec<Self> {
+        fn item_list_to_contents(item_list: &ItemList<'_>) -> Vec<Content> {
+            let mut result = vec![];
+            for item in item_list.items() {
+                let mut content = Content::new(item.value());
+                if item.children().items.len() == 0 {
+                    result.push(content);
+                    continue;
+                }
+                let children = item.children();
+                content.children = Some(item_list_to_contents(children));
+                result.push(content);
+            }
+            result
+        }
+        match component {
+            Component::List(list) => item_list_to_contents(list),
+            _ => todo!(),
+        }
+    }
     fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -132,6 +152,14 @@ impl Content {
             children.push(Content::new(child));
         } else {
             self.children = Some(vec![Content::new(child)]);
+        }
+    }
+}
+impl From<&Component<'_>> for Content {
+    fn from(component: &Component<'_>) -> Self {
+        match component {
+            Component::Text(text) => Self::new(text.value()),
+            _ => todo!(),
         }
     }
 }
@@ -211,6 +239,59 @@ mod tests {
 
             assert_eq!(sut.content[0].text, "Hello World");
             assert_eq!(sut.content[1].text, "Good Bye");
+        }
+    }
+    mod content_test {
+        use crate::{
+            md::{Component, Item, ItemList, Text},
+            pptx::Content,
+        };
+
+        #[test]
+        #[allow(non_snake_case)]
+        fn contentはComponentのTextから生成できる() {
+            let component = Component::Text(Text::H2("Hello World"));
+
+            let sut = Content::from(&component);
+
+            assert_eq!(sut.text, "Hello World");
+        }
+        #[test]
+        #[allow(non_snake_case)]
+        fn contentはComponentのListから生成できる() {
+            // - Root1
+            //  - Parent1
+            // - Root2
+            //  - Parent2
+            //
+            let list = ItemList {
+                items: vec![
+                    Item {
+                        value: Text::H2("Root1"),
+                        children: ItemList {
+                            items: vec![Item {
+                                value: Text::Normal("Parent1"),
+                                children: ItemList { items: vec![] },
+                            }],
+                        },
+                    },
+                    Item {
+                        value: Text::H2("Root2"),
+                        children: ItemList {
+                            items: vec![Item {
+                                value: Text::Normal("Parent2"),
+                                children: ItemList { items: vec![] },
+                            }],
+                        },
+                    },
+                ],
+            };
+
+            let component = Component::List(list);
+
+            let sut = Content::from_component(&component);
+
+            assert_eq!(sut[0].text, "Root1");
         }
     }
 
