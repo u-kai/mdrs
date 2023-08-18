@@ -54,6 +54,21 @@ use crate::md::{Component, ItemList, Markdown, Page, Text};
 //}
 
 impl Pptx {
+    pub fn from_md_with_config(
+        md: Markdown<'_>,
+        filename: impl Into<String>,
+        config: &ContentConfig,
+    ) -> Self {
+        let pages = md.pages();
+        let slides = pages
+            .into_iter()
+            .map(|p| Slide::from_page_with_config(p, &config))
+            .collect();
+        Self {
+            filename: filename.into(),
+            slides,
+        }
+    }
     pub fn from_md(md: Markdown<'_>, filename: impl Into<String>) -> Self {
         let pages = md.pages();
         let slides = pages.into_iter().map(Slide::from).collect();
@@ -382,7 +397,10 @@ impl From<Page<'_>> for Slide {
 #[cfg(test)]
 mod tests {
     mod pptx_tests {
-        use crate::{md::Markdown, pptx::Pptx};
+        use crate::{
+            md::Markdown,
+            pptx::{ContentConfig, Font, Pptx},
+        };
 
         use super::*;
         #[test]
@@ -402,7 +420,27 @@ mod tests {
             assert_eq!(sut.slides.len(), 3);
         }
         #[test]
-        fn configを設定可能() {}
+        fn configを設定可能() {
+            let mut lines = String::new();
+            lines.push_str("# Title\n");
+            lines.push_str("---\n");
+            lines.push_str("# Rust is very good language!!\n");
+            lines.push_str("- # So fast\n");
+            lines.push_str("    - Because of no GC\n");
+            lines.push_str("- So safe\n");
+            lines.push_str("    - Because of borrow checker\n");
+            lines.push_str("---\n");
+            let md = Markdown::parse(&lines);
+            let config = ContentConfig::default().h1(Font {
+                size: 100,
+                bold: false,
+            });
+            let sut = Pptx::from_md_with_config(md, "test.pptx", &config);
+
+            assert_eq!(sut.slides.len(), 3);
+            assert_eq!(sut.slides[1].content[0].font.size, 100);
+            assert!(!sut.slides[1].content[0].font.bold);
+        }
     }
     mod slide_tests {
         use super::*;
