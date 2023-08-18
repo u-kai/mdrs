@@ -245,6 +245,14 @@ impl ContentConfig {
             },
         }
     }
+    fn case_normal(&self) -> ContentConfigValue {
+        ContentConfigValue {
+            font: Font {
+                bold: false,
+                size: 18,
+            },
+        }
+    }
 }
 struct ContentConfigValue {
     font: Font,
@@ -328,6 +336,38 @@ mod tests {
             assert_eq!(sut.content[1].text, "Good Bye");
         }
     }
+    mod config_test {
+        use crate::{
+            md::{Component, Text},
+            pptx::{Content, ContentConfig},
+        };
+
+        #[test]
+        #[allow(non_snake_case)]
+        fn ContentConfigはcontentのfontの設定を自由に設定するための構造体_ver_text() {
+            let config = ContentConfig::default();
+            let component = Component::Text(Text::H1("Title"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.bold, config.case_h1().font.bold);
+            assert_eq!(sut[0].font.size, config.case_h1().font.size);
+
+            let config = ContentConfig::default();
+            let component = Component::Text(Text::H2("Hello World"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.bold, config.case_h2().font.bold);
+            assert_eq!(sut[0].font.size, config.case_h2().font.size);
+
+            let config = ContentConfig::default();
+            let component = Component::Text(Text::Normal("Hello World"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.bold, config.case_normal().font.bold);
+            assert_eq!(sut[0].font.size, config.case_normal().font.size);
+        }
+    }
+
     mod content_test {
         use crate::{
             md::{Component, Item, ItemList, Text},
@@ -350,23 +390,6 @@ mod tests {
 
             assert_eq!(sut.font.size, 28);
             assert!(sut.font.bold);
-        }
-        #[test]
-        #[allow(non_snake_case)]
-        fn ContentConfigはcontentのfontの設定を自由に設定するための構造体_ver_text() {
-            let config = ContentConfig::default();
-            let component = Component::Text(Text::H1("Title"));
-            let sut = Content::from_component_with_config(&component, config.clone());
-
-            assert_eq!(sut[0].font.bold, config.case_h1().font.bold);
-            assert_eq!(sut[0].font.size, config.case_h1().font.size);
-
-            let config = ContentConfig::default();
-            let component = Component::Text(Text::H2("Hello World"));
-            let sut = Content::from_component_with_config(&component, config.clone());
-
-            assert_eq!(sut[0].font.bold, config.case_h2().font.bold);
-            assert_eq!(sut[0].font.size, config.case_h2().font.size);
         }
         #[test]
         #[allow(non_snake_case)]
