@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::md::{Component, Markdown, Text};
+use crate::md::{Component, Markdown, Page, Text};
 
 //fn page_to_slide(page: Vec<Component>) -> Slide {
 //    let mut result = Slide::blank();
@@ -135,10 +135,38 @@ impl Content {
         }
     }
 }
+
+impl From<Page<'_>> for Slide {
+    fn from(page: Page<'_>) -> Self {
+        let mut result = Slide::blank();
+        let components = page.components();
+        for component in components {
+            match component {
+                Component::Text(text) => {
+                    result.add_content(Content::new(text.value()));
+                }
+                _ => todo!(),
+            }
+        }
+        result
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::md::Markdown;
+    use crate::md::{Markdown, Page};
+    #[test]
+    fn slideはpageから生成可能() {
+        let components1 = Component::Text(Text::H2("Hello World"));
+        let components2 = Component::Text(Text::H2("Good Bye"));
+        let components = [components1, components2];
+        let page = Page::new(&components);
+
+        let sut = Slide::from(page);
+
+        assert_eq!(sut.content[0].text, "Hello World");
+        assert_eq!(sut.content[1].text, "Good Bye");
+    }
 
     //#[test]
     //fn md_をpptxの構造体に変換する() {

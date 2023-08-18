@@ -13,10 +13,10 @@ pub struct Page<'a> {
 }
 
 impl<'a> Page<'a> {
-    fn new(components: &'a [Component<'a>]) -> Self {
+    pub fn new(components: &'a [Component<'a>]) -> Self {
         Self { components }
     }
-    fn components(&self) -> impl Iterator<Item = &'a Component<'a>> {
+    pub fn components(&self) -> impl Iterator<Item = &'a Component<'a>> {
         self.components.iter()
     }
 }
