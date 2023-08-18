@@ -46,7 +46,7 @@ impl Pptx {
 pub struct Slide {
     r#type: String,
     title: Option<String>,
-    content: Vec<Content>,
+    contents: Vec<Content>,
 }
 impl Slide {
     fn from_page_with_config(page: Page<'_>, config: &ContentConfig) -> Self {
@@ -58,7 +58,7 @@ impl Slide {
         if component_num == 1 {
             match components.next().unwrap() {
                 Component::Text(Text::H1(title)) => {
-                    return Slide::title_only(*title);
+                    return Slide::title_slide(*title);
                 }
                 Component::Text(text) => {
                     let mut result = Slide::blank();
@@ -102,28 +102,35 @@ impl Slide {
         );
         slide
     }
+    fn title_slide(title: impl Into<String>) -> Self {
+        Self {
+            r#type: "title_slide".to_string(),
+            title: Some(title.into()),
+            contents: Vec::new(),
+        }
+    }
     fn title_only(title: impl Into<String>) -> Self {
         Self {
             r#type: "title_only".to_string(),
             title: Some(title.into()),
-            content: Vec::new(),
+            contents: Vec::new(),
         }
     }
     fn title_and_content(title: impl Into<String>) -> Self {
         Self {
             r#type: "title_and_content".to_string(),
             title: Some(title.into()),
-            content: Vec::new(),
+            contents: Vec::new(),
         }
     }
     fn add_content(&mut self, content: Content) {
-        self.content.push(content);
+        self.contents.push(content);
     }
     fn blank() -> Self {
         Self {
             r#type: "blank".to_string(),
             title: None,
-            content: Vec::new(),
+            contents: Vec::new(),
         }
     }
 }
@@ -131,7 +138,8 @@ impl Slide {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Content {
     text: String,
-    font: Font,
+    size: usize,
+    bold: bool,
     children: Option<Vec<Content>>,
 }
 
@@ -178,18 +186,22 @@ impl Default for Font {
 }
 
 impl Content {
-    fn new_with_font(text: impl Into<String>, font: Font) -> Self {
+    fn from_font(text: impl Into<String>, font: Font) -> Self {
         Self {
             text: text.into(),
-            font,
             children: None,
+            size: font.size,
+            bold: font.bold,
         }
     }
+    fn new_with_font(text: impl Into<String>, font: Font) -> Self {
+        Self::from_font(text, font)
+    }
     fn to_bold(&mut self) {
-        self.font.bold = true;
+        self.bold = true;
     }
     fn change_size(&mut self, size: usize) {
-        self.font.size = size;
+        self.size = size;
     }
     fn from_component_with_config(component: &Component<'_>, config: &ContentConfig) -> Vec<Self> {
         fn item_list_to_contents(
@@ -212,9 +224,7 @@ impl Content {
             result
         }
         fn text_to_content(text: &Text<'_>, config: &ContentConfig) -> Content {
-            let mut content = Content::new(text.value());
-            content.font = config.text_font(text);
-            content
+            Content::from_font(text.value(), config.text_font(text))
         }
         match component {
             Component::List(list) => item_list_to_contents(list, &config, 0),
@@ -246,11 +256,7 @@ impl Content {
         }
     }
     fn new(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            children: None,
-            font: Font::default(),
-        }
+        Self::from_font(text, Font::default())
     }
     fn add_child(&mut self, child: impl Into<String>) {
         if let Some(children) = &mut self.children {
@@ -294,19 +300,19 @@ impl ContentConfig {
             Text::Normal(_) => self.normal.clone(),
         }
     }
-    fn per_level(self, per_level: usize) -> Self {
+    pub fn per_level(self, per_level: usize) -> Self {
         Self { per_level, ..self }
     }
-    fn h1(self, font: Font) -> Self {
+    pub fn h1(self, font: Font) -> Self {
         Self { h1: font, ..self }
     }
-    fn h2(self, font: Font) -> Self {
+    pub fn h2(self, font: Font) -> Self {
         Self { h2: font, ..self }
     }
-    fn h3(self, font: Font) -> Self {
+    pub fn h3(self, font: Font) -> Self {
         Self { h3: font, ..self }
     }
-    fn normal(self, font: Font) -> Self {
+    pub fn normal(self, font: Font) -> Self {
         Self {
             normal: font,
             ..self
@@ -386,8 +392,8 @@ mod tests {
             let sut = Pptx::from_md_with_config(md, "test.pptx", &config);
 
             assert_eq!(sut.slides.len(), 3);
-            assert_eq!(sut.slides[1].content[0].font.size, 100);
-            assert!(!sut.slides[1].content[0].font.bold);
+            assert_eq!(sut.slides[1].contents[0].size, 100);
+            assert!(!sut.slides[1].contents[0].bold);
         }
     }
     mod slide_tests {
@@ -410,8 +416,8 @@ mod tests {
             ]);
             let sut = Slide::from_page_with_config(page, &config);
 
-            assert_eq!(sut.content[0].font.size, 100);
-            assert!(!sut.content[0].font.bold);
+            assert_eq!(sut.contents[0].size, 100);
+            assert!(!sut.contents[0].bold);
         }
         #[test]
         fn pageの先頭要素がheadingでなければblankスライドを生成してcontentを追加する() {
@@ -439,14 +445,14 @@ mod tests {
             let sut = Slide::from(page);
 
             assert_eq!(sut.r#type, "blank");
-            assert_eq!(sut.content[0].text, "Rust is very good language!!");
-            assert_eq!(sut.content[1].text, "So fast");
+            assert_eq!(sut.contents[0].text, "Rust is very good language!!");
+            assert_eq!(sut.contents[1].text, "So fast");
             assert_eq!(
-                sut.content[1].children.as_ref().unwrap()[0].text,
+                sut.contents[1].children.as_ref().unwrap()[0].text,
                 "Because of no GC"
             );
-            assert_eq!(sut.content[2].text, "Nice type system");
-            assert_eq!(sut.content[2].children.as_ref(), None);
+            assert_eq!(sut.contents[2].text, "Nice type system");
+            assert_eq!(sut.contents[2].children.as_ref(), None);
         }
         #[test]
         fn pageの先頭要素がheadingでかつ他の要素があればtitle_and_contentスライドを生成してtitleとcontentを追加する(
@@ -462,7 +468,7 @@ mod tests {
 
             assert_eq!(sut.r#type, "title_and_content");
             assert_eq!(sut.title.unwrap(), title_str);
-            assert_eq!(sut.content[0].text, content_str);
+            assert_eq!(sut.contents[0].text, content_str);
         }
         #[test]
         fn pageの要素が一つかつその要素がheading1以外であればblankスライドを生成してcontentに追加する(
@@ -476,7 +482,7 @@ mod tests {
 
             assert_eq!(sut.r#type, "blank");
             assert_eq!(sut.title, None);
-            assert_eq!(sut.content[0].text, content_str);
+            assert_eq!(sut.contents[0].text, content_str);
         }
         #[test]
         fn pageの要素が一つかつその要素がheading1であればtitleスライドを生成する() {
@@ -487,7 +493,7 @@ mod tests {
 
             let sut = Slide::from(page);
 
-            assert_eq!(sut.r#type, "title_only");
+            assert_eq!(sut.r#type, "title_slide");
             assert_eq!(sut.title.unwrap(), title_str);
         }
         #[test]
@@ -498,7 +504,7 @@ mod tests {
 
             assert_eq!(sut.r#type, "blank");
             assert_eq!(sut.title, None);
-            assert_eq!(sut.content.len(), 0);
+            assert_eq!(sut.contents.len(), 0);
         }
     }
     mod config_test {
@@ -527,22 +533,22 @@ mod tests {
                 });
             let component = Component::Text(Text::H1("Title"));
             let sut = Content::from_component_with_config(&component, &config);
-            assert_eq!(sut[0].font.bold, true);
-            assert_eq!(sut[0].font.size, 32);
+            assert_eq!(sut[0].bold, true);
+            assert_eq!(sut[0].size, 32);
 
             let component = Component::Text(Text::H2("Hello World"));
             let sut = Content::from_component_with_config(&component, &config);
-            assert_eq!(sut[0].font.bold, false);
-            assert_eq!(sut[0].font.size, 100);
+            assert_eq!(sut[0].bold, false);
+            assert_eq!(sut[0].size, 100);
             let component = Component::Text(Text::H3("Hello World"));
             let sut = Content::from_component_with_config(&component, &config);
-            assert_eq!(sut[0].font.bold, true);
-            assert_eq!(sut[0].font.size, 110);
+            assert_eq!(sut[0].bold, true);
+            assert_eq!(sut[0].size, 110);
 
             let component = Component::Text(Text::Normal("Hello World"));
             let sut = Content::from_component_with_config(&component, &config);
-            assert_eq!(sut[0].font.bold, true);
-            assert_eq!(sut[0].font.size, 180);
+            assert_eq!(sut[0].bold, true);
+            assert_eq!(sut[0].size, 180);
         }
 
         #[test]
@@ -568,9 +574,9 @@ mod tests {
             let component = Component::List(ItemList { items: vec![top] });
             let sut = Content::from_component_with_config(&component, &config);
 
-            assert_eq!(sut[0].font.size, config.case_normal().font.size);
+            assert_eq!(sut[0].size, config.case_normal().font.size);
             assert_eq!(
-                sut[0].children.as_ref().unwrap()[0].font.size,
+                sut[0].children.as_ref().unwrap()[0].size,
                 config.case_normal().font.size - 10
             );
             assert_eq!(
@@ -578,7 +584,6 @@ mod tests {
                     .children
                     .as_ref()
                     .unwrap()[0]
-                    .font
                     .size,
                 config.case_h1().font.size - 20
             );
@@ -587,7 +592,6 @@ mod tests {
                     .children
                     .as_ref()
                     .unwrap()[0]
-                    .font
                     .bold,
                 config.case_h1().font.bold
             );
@@ -615,16 +619,13 @@ mod tests {
             let component = Component::List(ItemList { items: vec![top] });
             let sut = Content::from_component_with_config(&component, &config);
 
-            assert_eq!(sut[0].font.size, config.case_normal().font.size);
-            assert!(
-                sut[0].children.as_ref().unwrap()[0].font.size < config.case_normal().font.size
-            );
+            assert_eq!(sut[0].size, config.case_normal().font.size);
+            assert!(sut[0].children.as_ref().unwrap()[0].size < config.case_normal().font.size);
             assert!(
                 sut[0].children.as_ref().unwrap()[0]
                     .children
                     .as_ref()
                     .unwrap()[0]
-                    .font
                     .size
                     < config.case_h1().font.size
             );
@@ -633,7 +634,6 @@ mod tests {
                     .children
                     .as_ref()
                     .unwrap()[0]
-                    .font
                     .bold,
                 config.case_h1().font.bold
             );
@@ -645,22 +645,22 @@ mod tests {
             let component = Component::Text(Text::H1("Title"));
             let sut = Content::from_component_with_config(&component, &config);
 
-            assert_eq!(sut[0].font.bold, config.case_h1().font.bold);
-            assert_eq!(sut[0].font.size, config.case_h1().font.size);
+            assert_eq!(sut[0].bold, config.case_h1().font.bold);
+            assert_eq!(sut[0].size, config.case_h1().font.size);
 
             let config = ContentConfig::default();
             let component = Component::Text(Text::H2("Hello World"));
             let sut = Content::from_component_with_config(&component, &config);
 
-            assert_eq!(sut[0].font.bold, config.case_h2().font.bold);
-            assert_eq!(sut[0].font.size, config.case_h2().font.size);
+            assert_eq!(sut[0].bold, config.case_h2().font.bold);
+            assert_eq!(sut[0].size, config.case_h2().font.size);
 
             let config = ContentConfig::default();
             let component = Component::Text(Text::Normal("Hello World"));
             let sut = Content::from_component_with_config(&component, &config);
 
-            assert_eq!(sut[0].font.bold, config.case_normal().font.bold);
-            assert_eq!(sut[0].font.size, config.case_normal().font.size);
+            assert_eq!(sut[0].bold, config.case_normal().font.bold);
+            assert_eq!(sut[0].size, config.case_normal().font.size);
         }
     }
 
@@ -674,8 +674,8 @@ mod tests {
         fn contentの初期fontはサイズが18でboldではない() {
             let sut = Content::new("Hello World");
 
-            assert_eq!(sut.font.size, 18);
-            assert!(!sut.font.bold);
+            assert_eq!(sut.size, 18);
+            assert!(!sut.bold);
         }
         #[test]
         fn contentはfontの設定が可能() {
@@ -684,8 +684,8 @@ mod tests {
             sut.change_size(28);
             sut.to_bold();
 
-            assert_eq!(sut.font.size, 28);
-            assert!(sut.font.bold);
+            assert_eq!(sut.size, 28);
+            assert!(sut.bold);
         }
         #[test]
         #[allow(non_snake_case)]
@@ -737,32 +737,4 @@ mod tests {
             assert_eq!(sut[1].children.as_ref().unwrap()[0].text, "Parent2");
         }
     }
-
-    //#[test]
-    //fn md_をpptxの構造体に変換する() {
-    //    let mut md = String::new();
-    //    md.push_str("# Title\n");
-    //    md.push_str("---");
-    //    md.push_str("# Languages\n");
-    //    md.push_str("- Rust\n");
-    //    md.push_str("   - Very fast\n");
-    //    md.push_str("- Python\n");
-    //    md.push_str("   - Very popular\n");
-    //    md.push_str("---");
-    //    let md = Markdown::parse(&md);
-    //    let pptx = Pptx::from_md(md, "test.pptx");
-
-    //    let mut expected = Pptx::new("test.pptx");
-    //    expected.add_slide(Slide::title_only("Title"));
-    //    let mut title_and_content = Slide::title_and_content("Languages");
-    //    let mut rust = Content::new("Rust");
-    //    rust.add_child("Very fast");
-    //    let mut python = Content::new("Python");
-    //    python.add_child("Very popular");
-    //    title_and_content.add_content(rust);
-    //    title_and_content.add_content(python);
-    //    expected.add_slide(title_and_content);
-
-    //    assert_eq!(pptx, expected);
-    //}
 }

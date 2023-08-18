@@ -1,0 +1,79 @@
+pptx: Pptx {
+    filename: "test.pptx",
+    slides: [
+        Slide {
+            type: "blank",
+            title: None,
+            contents: [],
+        },
+        Slide {
+            type: "title_slide",
+            title: Some(
+                "mdrs",
+            ),
+            contents: [],
+        },
+        Slide {
+            type: "title_and_content",
+            title: Some(
+                "What is it?",
+            ),
+            contents: [
+                Content {
+                    text: "This crate is Markdown parser",
+                    size: 24,
+                    bold: false,
+                    children: None,
+                },
+                Content {
+                    text: "How use it?",
+                    size: 28,
+                    bold: true,
+                    children: None,
+                },
+                Content {
+                    text: "run",
+                    size: 24,
+                    bold: false,
+                    children: Some(
+                        [
+                            Content {
+                                text: "parse",
+                                size: 20,
+                                bold: false,
+                                children: Some(
+                                    [
+                                        Content {
+                                            text: "print",
+                                            size: 16,
+                                            bold: false,
+                                            children: None,
+                                        },
+                                    ],
+                                ),
+                            },
+                        ],
+                    ),
+                },
+            ],
+        },
+        Slide {
+            type: "blank",
+            title: None,
+            contents: [
+                Content {
+                    text: "Have a nice day!",
+                    size: 18,
+                    bold: false,
+                    children: None,
+                },
+            ],
+        },
+        Slide {
+            type: "blank",
+            title: None,
+            contents: [],
+        },
+    ],
+}
+success
