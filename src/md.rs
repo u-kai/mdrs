@@ -38,25 +38,32 @@ impl<'a> Markdown<'a> {
         let mut lines = input.lines().peekable();
 
         while let Some(line) = lines.peek() {
+            println!("line: {}", line);
             if Markdown::is_skip(line) {
+                println!("skip line: {}", line);
                 // consume line
                 let _ = lines.next().unwrap();
                 continue;
             }
 
             if let Some(_split_line) = SplitLine::parse(line) {
+                println!("split line: {}", line);
                 components.push(Component::SplitLine);
                 // consume line
                 let _ = lines.next().unwrap();
                 continue;
             }
 
-            if let Some(component) = Markdown::parse_list(&mut lines) {
-                components.push(component);
-                continue;
+            if line.contains("- ") || line.contains("* ") {
+                if let Some(component) = Markdown::parse_list(&mut lines) {
+                    println!("list: {:#?}", component);
+                    components.push(component);
+                    continue;
+                }
             }
             // それ以外の場合はテキストとして追加
             let line = lines.next().unwrap();
+            println!("other line: {}", line);
             components.push(Markdown::parse_text(line));
         }
 
@@ -66,6 +73,7 @@ impl<'a> Markdown<'a> {
         line.is_empty()
     }
     fn parse_list(lines: &mut Peekable<Lines<'a>>) -> Option<Component<'a>> {
+        println!("parse_list");
         let list = ItemList::parse(lines, 0);
         if list.item_len() > 0 {
             Some(Component::List(list))
@@ -103,6 +111,7 @@ impl<'a> ItemList<'a> {
     fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
         let mut result = Self::new();
         while let Some(line) = lines.peek() {
+            println!("list-first-line: {}", line);
             if Self::is_skip(line) {
                 let _ = lines.next().unwrap();
                 continue;
@@ -112,6 +121,7 @@ impl<'a> ItemList<'a> {
             }
             // 指定されているインデントと同じ場合は同じ階層として追加
             if Self::is_item_line(line, indent) {
+                println!("is_item_line: {} , indet {}", line, indent);
                 let line = lines.next().unwrap();
                 let mut item = Self::get_item_from_line(line, indent);
                 // 子供がいれば再起的に子供を追加
@@ -125,6 +135,10 @@ impl<'a> ItemList<'a> {
             // 自分より親のインデントの場合はlineを消費せずに終了
             if Self::indent_count(line) < indent {
                 return result;
+            }
+            // 自分より子のインデントの場合は再起的に子供を追加
+            if let Some(child) = Self::get_children_from_line(lines, indent) {
+                result.add(child);
             }
         }
         result
@@ -179,8 +193,9 @@ impl<'a> ItemList<'a> {
     fn is_end_loop(line: &str) -> bool {
         // 空行ではないかつ空白以外の最初の文字がMARKと異なっていれば終了
         // またsplit_lineの場合は文字が一緒なのでsplit_lineの場合も考慮する必要がある
-        let first_str = &line.trim_start()[0..1];
-        SplitLine::parse(line).is_some() || (!line.is_empty() && !["-", "*"].contains(&first_str))
+        let first_str = line.trim_start().get(0..1);
+        SplitLine::parse(line).is_some()
+            || (!line.is_empty() && first_str.map(|s| !["-", "*"].contains(&s)).unwrap_or(false))
     }
     fn start_condition(indent: usize) -> String {
         format!("{}{}", " ".repeat(indent), "- ")
@@ -282,6 +297,33 @@ mod tests {
 
         assert_eq!(heading, &Component::Text(Text::H1("Title---# Rust is very good language!!- So fast    - Because of no GC- So safe    - Because of borrow checker---")));
     }
+
+    #[test]
+    fn learning_loop() {
+        let data = r#"---
+
+# 目的
+
+- TDD は何なのかがわかるようになる
+
+  - 何を目的としているものなのか？
+  - どのような手法なのか？
+  - 何が嬉しいのか？
+
+- TDD が必要な理由/背景がわかる
+"#;
+        let md = Markdown::parse(data);
+        let data = r#"---
+
+# 良いテストの考え方
+
+一般的に良いテストとは次のような考え方
+
+### テスト実行方法
+        "#;
+        let md = Markdown::parse(data);
+    }
+
     #[test]
     fn 複数の行をparseできる() {
         let mut lines = String::new();

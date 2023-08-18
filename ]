@@ -70,8 +70,8 @@ impl Slide {
                 }
                 component @ _ => {
                     let mut result = Slide::blank();
-                    let contents = Content::from_component_with_config(component, config);
-                    contents.into_iter().for_each(|c| result.add_content(c));
+                    let contents = Slide::from_page_with_config(Page::new(component), config);
+                    result.add_content(contents);
                     return result;
                 }
                 _ => todo!(),

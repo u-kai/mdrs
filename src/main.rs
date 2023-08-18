@@ -6,7 +6,7 @@ use std::fs::read_to_string;
 
 #[tokio::main]
 async fn main() {
-    let filename = "README.md";
+    let filename = std::env::args().nth(1).unwrap();
     let content = read_to_string(filename).unwrap();
     let md = Markdown::parse(&content);
     let config = ContentConfig::default()
