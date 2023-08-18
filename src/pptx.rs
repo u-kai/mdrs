@@ -88,6 +88,57 @@ pub struct Slide {
     content: Vec<Content>,
 }
 impl Slide {
+    fn from_page_with_config(page: Page<'_>, config: &ContentConfig) -> Self {
+        let mut components = page.components();
+        let component_num = page.components().count();
+
+        if component_num == 1 {
+            match components.next().unwrap() {
+                Component::Text(Text::H1(title)) => {
+                    return Slide::title_only(*title);
+                }
+                Component::Text(text) => {
+                    let mut result = Slide::blank();
+                    result.add_content(Content::new(text.value()));
+                    return result;
+                }
+                _ => todo!(),
+            }
+        }
+
+        fn components_to_contents(
+            components: &[&Component<'_>],
+            config: &ContentConfig,
+        ) -> Vec<Content> {
+            components
+                .into_iter()
+                .map(|c| Content::from_component_with_config(c, config))
+                .flatten()
+                .collect()
+        }
+        fn add_content_to_slide(slide: &mut Slide, content: Vec<Content>) {
+            content.into_iter().for_each(|c| slide.add_content(c));
+        }
+
+        let first = components.next().unwrap();
+        let mut slide = match first {
+            Component::Text(Text::H1(title) | Text::H2(title) | Text::H3(title)) => {
+                Slide::title_and_content(*title)
+            }
+            _ => {
+                let mut result = Slide::blank();
+                let contents = Content::from_component_with_config(first, config);
+                add_content_to_slide(&mut result, contents);
+                result
+            }
+        };
+        let components = components.collect::<Vec<_>>();
+        add_content_to_slide(
+            &mut slide,
+            components_to_contents(components.as_slice(), config),
+        );
+        slide
+    }
     fn title_only(title: impl Into<String>) -> Self {
         Self {
             r#type: "title_only".to_string(),
@@ -325,51 +376,7 @@ struct ContentConfigValue {
 
 impl From<Page<'_>> for Slide {
     fn from(page: Page<'_>) -> Self {
-        let mut components = page.components();
-        let component_num = page.components().count();
-
-        if component_num == 1 {
-            match components.next().unwrap() {
-                Component::Text(Text::H1(title)) => {
-                    return Slide::title_only(*title);
-                }
-                Component::Text(text) => {
-                    let mut result = Slide::blank();
-                    result.add_content(Content::new(text.value()));
-                    return result;
-                }
-                _ => todo!(),
-            }
-        }
-
-        fn components_to_contents(components: &[&Component<'_>]) -> Vec<Content> {
-            let config = ContentConfig::default();
-            components
-                .into_iter()
-                .map(|c| Content::from_component_with_config(c, &config))
-                .flatten()
-                .collect()
-        }
-        fn add_content_to_slide(slide: &mut Slide, content: Vec<Content>) {
-            content.into_iter().for_each(|c| slide.add_content(c));
-        }
-
-        let first = components.next().unwrap();
-        let mut slide = match first {
-            Component::Text(Text::H1(title) | Text::H2(title) | Text::H3(title)) => {
-                Slide::title_and_content(*title)
-            }
-            _ => {
-                let mut result = Slide::blank();
-                let contents =
-                    Content::from_component_with_config(first, &ContentConfig::default());
-                add_content_to_slide(&mut result, contents);
-                result
-            }
-        };
-        let components = components.collect::<Vec<_>>();
-        add_content_to_slide(&mut slide, components_to_contents(components.as_slice()));
-        slide
+        Self::from_page_with_config(page, &ContentConfig::default())
     }
 }
 
@@ -379,9 +386,25 @@ mod tests {
         use super::*;
         use crate::{
             md::{Component, Item, ItemList, Markdown, Page, Text},
-            pptx::Slide,
+            pptx::{ContentConfig, Font, Slide},
         };
 
+        #[test]
+        fn configを設定可能() {
+            let config = ContentConfig::default().h1(Font {
+                size: 100,
+                bold: false,
+            });
+
+            let page = Page::new(&[
+                Component::Text(Text::H1("Dummy")),
+                Component::Text(Text::H1("Rust is very good language!!")),
+            ]);
+            let sut = Slide::from_page_with_config(page, &config);
+
+            assert_eq!(sut.content[0].font.size, 100);
+            assert!(!sut.content[0].font.bold);
+        }
         #[test]
         fn pageの先頭要素がheadingでなければblankスライドを生成してcontentを追加する() {
             let text = Component::Text(Text::Normal("Rust is very good language!!"));
