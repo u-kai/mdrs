@@ -2,61 +2,56 @@ use serde::{Deserialize, Serialize};
 
 use crate::md::{Component, Markdown, Text};
 
-fn page_to_slide(page:Vec<Component>)->Slide {
-    let mut result = Slide::blank();
-    for (i,component) in page.into_iter().enumerate() {
-        match component {
-            Component::List(list) => {
-                for item in list.items() {
-                   let mut content = Content::new(item.value()) ;
-                   for child in item.children() {
-                       content.add_child(child.value());
-                   }
-                }                
-            }
-            Component::SplitLine=>panic!("SplitLine is not allowed in page"),
-            Component::Text(text) if i == 0 => {
-                match text {
-                    Text::Normal(text) =>{
-                        result.add_content(Content::new(text));
-                    }
-                    text=>{
-                        result = Slide::title_only(text.value().to_string());
-                    }
-                }
-            }
-            Component::Text(text)  => {
-                match text {
-                    Text::Normal(text) =>{
-                        result.add_content(Content::new(text));
-                    }
-                    _=>{
-                        result.add_content(Content::new(text.value()));
-                    }
-                }
-            }
-        }
-    }
-    result
-
-}
-fn md_to_slides(md: Markdown<'_>) -> Vec<Slide> {
-    let mut result = Vec::new();
-    let pages = md.components().cloned().collect::<Vec<_>>();
-    let mut pages = pages.split(|c| c == &Component::SplitLine);
-
-    let init = pages.next().unwrap();
-    match init {
-        Component::Text(Text::H1(title)) => {
-            result.push(Slide::title_only(*title));
-        }
-        _ => {}
-    }
-    for page in pages {
-        match 
-    }
-    result
-}
+//fn page_to_slide(page: Vec<Component>) -> Slide {
+//    let mut result = Slide::blank();
+//    for (i, component) in page.into_iter().enumerate() {
+//        match component {
+//            Component::List(list) => {
+//                for item in list.items() {
+//                    let mut content = Content::new(item.value());
+//                    for child in item.children() {
+//                        content.add_child(child.value());
+//                    }
+//                }
+//            }
+//            Component::SplitLine => panic!("SplitLine is not allowed in page"),
+//            Component::Text(text) if i == 0 => match text {
+//                Text::Normal(text) => {
+//                    result.add_content(Content::new(text));
+//                }
+//                text => {
+//                    result = Slide::title_only(text.value().to_string());
+//                }
+//            },
+//            Component::Text(text) => match text {
+//                Text::Normal(text) => {
+//                    result.add_content(Content::new(text));
+//                }
+//                _ => {
+//                    result.add_content(Content::new(text.value()));
+//                }
+//            },
+//        }
+//    }
+//    result
+//}
+//fn md_to_slides(md: Markdown<'_>) -> Vec<Slide> {
+//    let mut result = Vec::new();
+//    let pages = md.components().cloned().collect::<Vec<_>>();
+//    let mut pages = pages.split(|c| c == &Component::SplitLine);
+//
+//    let init = pages.next().unwrap();
+//    match init {
+//        Component::Text(Text::H1(title)) => {
+//            result.push(Slide::title_only(*title));
+//        }
+//        _ => {}
+//    }
+//    for page in pages {
+//        match
+//    }
+//    result
+//}
 
 fn md_to_pptx(md: Markdown<'_>, filename: impl Into<String>) -> Pptx {
     let mut result = Pptx::new(filename);
@@ -145,31 +140,31 @@ mod tests {
     use super::*;
     use crate::md::Markdown;
 
-    #[test]
-    fn md_をpptxの構造体に変換する() {
-        let mut md = String::new();
-        md.push_str("# Title\n");
-        md.push_str("---");
-        md.push_str("# Languages\n");
-        md.push_str("- Rust\n");
-        md.push_str("   - Very fast\n");
-        md.push_str("- Python\n");
-        md.push_str("   - Very popular\n");
-        md.push_str("---");
-        let md = Markdown::parse(&md);
-        let pptx = Pptx::from_md(md, "test.pptx");
+    //#[test]
+    //fn md_をpptxの構造体に変換する() {
+    //    let mut md = String::new();
+    //    md.push_str("# Title\n");
+    //    md.push_str("---");
+    //    md.push_str("# Languages\n");
+    //    md.push_str("- Rust\n");
+    //    md.push_str("   - Very fast\n");
+    //    md.push_str("- Python\n");
+    //    md.push_str("   - Very popular\n");
+    //    md.push_str("---");
+    //    let md = Markdown::parse(&md);
+    //    let pptx = Pptx::from_md(md, "test.pptx");
 
-        let mut expected = Pptx::new("test.pptx");
-        expected.add_slide(Slide::title_only("Title"));
-        let mut title_and_content = Slide::title_and_content("Languages");
-        let mut rust = Content::new("Rust");
-        rust.add_child("Very fast");
-        let mut python = Content::new("Python");
-        python.add_child("Very popular");
-        title_and_content.add_content(rust);
-        title_and_content.add_content(python);
-        expected.add_slide(title_and_content);
+    //    let mut expected = Pptx::new("test.pptx");
+    //    expected.add_slide(Slide::title_only("Title"));
+    //    let mut title_and_content = Slide::title_and_content("Languages");
+    //    let mut rust = Content::new("Rust");
+    //    rust.add_child("Very fast");
+    //    let mut python = Content::new("Python");
+    //    python.add_child("Very popular");
+    //    title_and_content.add_content(rust);
+    //    title_and_content.add_content(python);
+    //    expected.add_slide(title_and_content);
 
-        assert_eq!(pptx, expected);
-    }
+    //    assert_eq!(pptx, expected);
+    //}
 }

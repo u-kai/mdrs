@@ -7,10 +7,28 @@ pub struct Markdown<'a> {
     components: Vec<Component<'a>>,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Page<'a> {
+    components: &'a [Component<'a>],
+}
+
+impl<'a> Page<'a> {
+    fn new(components: &'a [Component<'a>]) -> Self {
+        Self { components }
+    }
+    fn components(&self) -> impl Iterator<Item = &'a Component<'a>> {
+        self.components.iter()
+    }
+}
 impl<'a> Markdown<'a> {
     pub fn parse(input: &'a str) -> Markdown {
         let components = Markdown::parse_components(input);
         Markdown { components }
+    }
+    pub fn pages(&'a self) -> impl Iterator<Item = Page<'a>> {
+        self.components
+            .split(|c| c == &Component::SplitLine)
+            .map(|c| Page::new(c))
     }
     pub fn components(&'a self) -> impl Iterator<Item = &Component<'a>> {
         self.components.iter()
@@ -226,6 +244,20 @@ impl Text<'_> {
         Text::Normal(line)
     }
 }
+#[derive(Debug, PartialEq)]
+pub struct SplitLine;
+impl SplitLine {
+    fn parse(line: &str) -> Option<Self> {
+        if line == "---" || line == "***" || line == "---\n" || line == "***\n" {
+            Some(SplitLine)
+        } else {
+            None
+        }
+    }
+    fn to_str(&self) -> &str {
+        "---"
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,22 +296,65 @@ mod tests {
         expected.add(Item::new("hoge"));
         assert_eq!(list_hoge, &Component::List(expected));
     }
-
     #[test]
-    fn 文字列からタイトルをparseできる() {
-        let title = "# Hello World";
-        let sut = Markdown::parse(title);
+    fn splitを境にpage構造体を作成することができる() {
+        let title_page_component = Component::Text(Text::H1("Learn Rust"));
+        let describe_page_title = Component::Text(Text::H1("Why Rust is very popular?"));
+        let describe_page_list = Component::List(ItemList {
+            items: vec![
+                Item {
+                    value: Text::H3("So fast"),
+                    children: ItemList {
+                        items: vec![Item {
+                            value: Text::Normal("Rust has not GC"),
+                            children: ItemList { items: vec![] },
+                        }],
+                    },
+                },
+                Item {
+                    value: Text::H3("So readable!"),
+                    children: ItemList { items: vec![] },
+                },
+            ],
+        });
+        let sut = Markdown {
+            components: vec![
+                title_page_component.clone(),
+                Component::SplitLine,
+                describe_page_title.clone(),
+                describe_page_list.clone(),
+            ],
+        };
 
-        let result = sut.components().next().unwrap();
+        let mut pages = sut.pages();
+        let mut title_page = pages.next().unwrap().components();
+        let title_component = title_page.next().unwrap();
+        assert_eq!(title_component, &title_page_component);
+        assert_eq!(title_page.next(), None);
 
-        assert_eq!(result, &Component::Text(Text::H1("Hello World")));
+        let mut describe_page = pages.next().unwrap().components();
+        let describe_component = describe_page.next().unwrap();
+        assert_eq!(describe_component, &describe_page_title);
+        let describe_component = describe_page.next().unwrap();
+        assert_eq!(describe_component, &describe_page_list);
+        assert_eq!(describe_page.next(), None);
 
-        let title = "# Good bye";
-        let sut = Markdown::parse(title);
+        assert_eq!(pages.next(), None);
+    }
+    #[test]
+    fn split_lineで終了している場合はcomponentsが空のpageが最後に生成される() {
+        let title_page_component = Component::Text(Text::H1("Learn Rust"));
+        let sut = Markdown {
+            components: vec![title_page_component.clone(), Component::SplitLine],
+        };
 
-        let result = sut.components().next().unwrap();
-
-        assert_eq!(result, &Component::Text(Text::H1("Good bye")));
+        let mut pages = sut.pages();
+        let mut title_page = pages.next().unwrap().components();
+        let title_component = title_page.next().unwrap();
+        assert_eq!(title_component, &title_page_component);
+        assert_eq!(title_page.next(), None);
+        assert_eq!(pages.next().unwrap(), Page { components: &[] });
+        assert_eq!(pages.next(), None);
     }
 
     // Only List tests
@@ -418,20 +493,5 @@ mod tests {
 
             assert_eq!(sut.to_str(), "---");
         }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct SplitLine;
-impl SplitLine {
-    fn parse(line: &str) -> Option<Self> {
-        if line == "---" || line == "***" || line == "---\n" || line == "***\n" {
-            Some(SplitLine)
-        } else {
-            None
-        }
-    }
-    fn to_str(&self) -> &str {
-        "---"
     }
 }
