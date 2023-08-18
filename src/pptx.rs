@@ -280,6 +280,9 @@ impl ContentConfig {
             Text::Normal(_) => self.normal.clone(),
         }
     }
+    fn per_level(self, per_level: usize) -> Self {
+        Self { per_level, ..self }
+    }
     fn h1(self, font: Font) -> Self {
         Self { h1: font, ..self }
     }
@@ -445,7 +448,54 @@ mod tests {
 
         #[test]
         #[allow(non_snake_case)]
-        fn ItemListのcontentのfontは子供のfontほど小さくなる() {
+        fn ItemListのcontentのfontの低下値は変更可能() {
+            let config = ContentConfig::default().per_level(10);
+            let bottom = Item {
+                value: Text::H1("Because of no GC!!"),
+                children: ItemList { items: vec![] },
+            };
+            let middle = Item {
+                value: Text::Normal("So fast!!"),
+                children: ItemList {
+                    items: vec![bottom],
+                },
+            };
+            let top = Item {
+                value: Text::Normal("Rust is very good language!!"),
+                children: ItemList {
+                    items: vec![middle],
+                },
+            };
+            let component = Component::List(ItemList { items: vec![top] });
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.size, config.case_normal().font.size);
+            assert_eq!(
+                sut[0].children.as_ref().unwrap()[0].font.size,
+                config.case_normal().font.size - 10
+            );
+            assert_eq!(
+                sut[0].children.as_ref().unwrap()[0]
+                    .children
+                    .as_ref()
+                    .unwrap()[0]
+                    .font
+                    .size,
+                config.case_h1().font.size - 20
+            );
+            assert_eq!(
+                sut[0].children.as_ref().unwrap()[0]
+                    .children
+                    .as_ref()
+                    .unwrap()[0]
+                    .font
+                    .bold,
+                config.case_h1().font.bold
+            );
+        }
+        #[test]
+        #[allow(non_snake_case)]
+        fn ItemListのcontentのfontは下層に降るほどfontが小さくなる() {
             let config = ContentConfig::default();
             let bottom = Item {
                 value: Text::H1("Because of no GC!!"),
