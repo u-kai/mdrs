@@ -159,14 +159,21 @@ impl Content {
             }
             result
         }
+        fn text_to_content(text: &Text<'_>, config: &ContentConfig) -> Content {
+            let mut content = Content::new(text.value());
+            match text {
+                Text::H1(_) => content.font = config.case_h1().font,
+                Text::H2(_) => content.font = config.case_h2().font,
+                Text::H3(_) => content.font = config.case_h3().font,
+                Text::Normal(_) => {}
+            }
+            content
+        }
         match component {
             Component::List(list) => item_list_to_contents(list, &config),
-            Component::Text(Text::H2(text)) => {
-                let mut content = Content::new(*text);
-                content.font = config.case_h2().font;
-                vec![content]
+            Component::Text(text) => {
+                vec![text_to_content(text, &config)]
             }
-            Component::Text(text) => vec![Content::new(text.value())],
             _ => todo!(),
         }
     }
@@ -214,7 +221,23 @@ impl Default for ContentConfig {
     }
 }
 impl ContentConfig {
+    fn case_h1(&self) -> ContentConfigValue {
+        ContentConfigValue {
+            font: Font {
+                bold: true,
+                size: 28,
+            },
+        }
+    }
     fn case_h2(&self) -> ContentConfigValue {
+        ContentConfigValue {
+            font: Font {
+                bold: true,
+                size: 28,
+            },
+        }
+    }
+    fn case_h3(&self) -> ContentConfigValue {
         ContentConfigValue {
             font: Font {
                 bold: true,
@@ -329,7 +352,15 @@ mod tests {
             assert!(sut.font.bold);
         }
         #[test]
-        fn contentのfontの設定を自由に設定できる() {
+        #[allow(non_snake_case)]
+        fn ContentConfigはcontentのfontの設定を自由に設定するための構造体_ver_text() {
+            let config = ContentConfig::default();
+            let component = Component::Text(Text::H1("Title"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.bold, config.case_h1().font.bold);
+            assert_eq!(sut[0].font.size, config.case_h1().font.size);
+
             let config = ContentConfig::default();
             let component = Component::Text(Text::H2("Hello World"));
             let sut = Content::from_component_with_config(&component, config.clone());
