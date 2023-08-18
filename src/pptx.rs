@@ -504,6 +504,16 @@ mod tests {
             assert_eq!(sut.r#type, "title_only");
             assert_eq!(sut.title.unwrap(), title_str);
         }
+        #[test]
+        fn pageに要素が一つもなければblankスライドを生成する() {
+            let page = Page::new(&[]);
+
+            let sut = Slide::from(page);
+
+            assert_eq!(sut.r#type, "blank");
+            assert_eq!(sut.title, None);
+            assert_eq!(sut.content.len(), 0);
+        }
     }
     mod config_test {
         use crate::{
