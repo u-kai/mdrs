@@ -177,7 +177,7 @@ impl Content {
     fn change_size(&mut self, size: usize) {
         self.font.size = size;
     }
-    fn from_component_with_config(component: &Component<'_>, config: ContentConfig) -> Vec<Self> {
+    fn from_component_with_config(component: &Component<'_>, config: &ContentConfig) -> Vec<Self> {
         fn item_list_to_contents(
             item_list: &ItemList<'_>,
             config: &ContentConfig,
@@ -341,16 +341,35 @@ impl From<Page<'_>> for Slide {
                 _ => todo!(),
             }
         }
-        let mut result = Slide::blank();
-        for component in components {
-            match component {
-                Component::Text(text) => {
-                    result.add_content(Content::new(text.value()));
-                }
-                _ => todo!(),
-            }
+
+        fn components_to_contents(components: &[&Component<'_>]) -> Vec<Content> {
+            let config = ContentConfig::default();
+            components
+                .into_iter()
+                .map(|c| Content::from_component_with_config(c, &config))
+                .flatten()
+                .collect()
         }
-        result
+        fn add_content_to_slide(slide: &mut Slide, content: Vec<Content>) {
+            content.into_iter().for_each(|c| slide.add_content(c));
+        }
+
+        let first = components.next().unwrap();
+        let mut slide = match first {
+            Component::Text(Text::H1(title) | Text::H2(title) | Text::H3(title)) => {
+                Slide::title_and_content(*title)
+            }
+            _ => {
+                let mut result = Slide::blank();
+                let contents =
+                    Content::from_component_with_config(first, &ContentConfig::default());
+                add_content_to_slide(&mut result, contents);
+                result
+            }
+        };
+        let components = components.collect::<Vec<_>>();
+        add_content_to_slide(&mut slide, components_to_contents(components.as_slice()));
+        slide
     }
 }
 
@@ -359,9 +378,61 @@ mod tests {
     mod slide_test {
         use super::*;
         use crate::{
-            md::{Component, Markdown, Page, Text},
+            md::{Component, Item, ItemList, Markdown, Page, Text},
             pptx::Slide,
         };
+
+        #[test]
+        fn pageの先頭要素がheadingでなければblankスライドを生成してcontentを追加する() {
+            let text = Component::Text(Text::Normal("Rust is very good language!!"));
+            let list = Component::List(ItemList {
+                items: vec![
+                    Item {
+                        value: Text::H1("So fast"),
+                        children: ItemList {
+                            items: vec![Item {
+                                value: Text::H1("Because of no GC"),
+                                children: ItemList { items: vec![] },
+                            }],
+                        },
+                    },
+                    Item {
+                        value: Text::H1("Nice type system"),
+                        children: ItemList { items: vec![] },
+                    },
+                ],
+            });
+            let components = [text, list];
+            let page = Page::new(&components);
+
+            let sut = Slide::from(page);
+
+            assert_eq!(sut.r#type, "blank");
+            assert_eq!(sut.content[0].text, "Rust is very good language!!");
+            assert_eq!(sut.content[1].text, "So fast");
+            assert_eq!(
+                sut.content[1].children.as_ref().unwrap()[0].text,
+                "Because of no GC"
+            );
+            assert_eq!(sut.content[2].text, "Nice type system");
+            assert_eq!(sut.content[2].children.as_ref(), None);
+        }
+        #[test]
+        fn pageの先頭要素がheadingでかつ他の要素があればtitle_and_contentスライドを生成してtitleとcontentを追加する(
+        ) {
+            let title_str = "Rust is very good language!!";
+            let title = Component::Text(Text::H1(title_str));
+            let content_str = "Rust is very good language!!";
+            let content = Component::Text(Text::H2(content_str));
+            let components = [title, content];
+            let page = Page::new(&components);
+
+            let sut = Slide::from(page);
+
+            assert_eq!(sut.r#type, "title_and_content");
+            assert_eq!(sut.title.unwrap(), title_str);
+            assert_eq!(sut.content[0].text, content_str);
+        }
         #[test]
         fn pageの要素が一つかつその要素がheading1以外であればblankスライドを生成してcontentに追加する(
         ) {
@@ -387,18 +458,6 @@ mod tests {
 
             assert_eq!(sut.r#type, "title_only");
             assert_eq!(sut.title.unwrap(), title_str);
-        }
-        #[test]
-        fn slideはpageから生成可能() {
-            let components1 = Component::Text(Text::H2("Hello World"));
-            let components2 = Component::Text(Text::H2("Good Bye"));
-            let components = [components1, components2];
-            let page = Page::new(&components);
-
-            let sut = Slide::from(page);
-
-            assert_eq!(sut.content[0].text, "Hello World");
-            assert_eq!(sut.content[1].text, "Good Bye");
         }
     }
     mod config_test {
@@ -426,22 +485,21 @@ mod tests {
                     size: 180,
                 });
             let component = Component::Text(Text::H1("Title"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
             assert_eq!(sut[0].font.bold, true);
             assert_eq!(sut[0].font.size, 32);
 
             let component = Component::Text(Text::H2("Hello World"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
             assert_eq!(sut[0].font.bold, false);
             assert_eq!(sut[0].font.size, 100);
-
             let component = Component::Text(Text::H3("Hello World"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
             assert_eq!(sut[0].font.bold, true);
             assert_eq!(sut[0].font.size, 110);
 
             let component = Component::Text(Text::Normal("Hello World"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
             assert_eq!(sut[0].font.bold, true);
             assert_eq!(sut[0].font.size, 180);
         }
@@ -467,7 +525,7 @@ mod tests {
                 },
             };
             let component = Component::List(ItemList { items: vec![top] });
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
 
             assert_eq!(sut[0].font.size, config.case_normal().font.size);
             assert_eq!(
@@ -514,7 +572,7 @@ mod tests {
                 },
             };
             let component = Component::List(ItemList { items: vec![top] });
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
 
             assert_eq!(sut[0].font.size, config.case_normal().font.size);
             assert!(
@@ -544,21 +602,21 @@ mod tests {
         fn contentのfontの設定をTextの列挙子によって切り分ける() {
             let config = ContentConfig::default();
             let component = Component::Text(Text::H1("Title"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
 
             assert_eq!(sut[0].font.bold, config.case_h1().font.bold);
             assert_eq!(sut[0].font.size, config.case_h1().font.size);
 
             let config = ContentConfig::default();
             let component = Component::Text(Text::H2("Hello World"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
 
             assert_eq!(sut[0].font.bold, config.case_h2().font.bold);
             assert_eq!(sut[0].font.size, config.case_h2().font.size);
 
             let config = ContentConfig::default();
             let component = Component::Text(Text::Normal("Hello World"));
-            let sut = Content::from_component_with_config(&component, config.clone());
+            let sut = Content::from_component_with_config(&component, &config);
 
             assert_eq!(sut[0].font.bold, config.case_normal().font.bold);
             assert_eq!(sut[0].font.size, config.case_normal().font.size);
