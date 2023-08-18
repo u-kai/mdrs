@@ -121,18 +121,45 @@ pub struct Content {
     children: Option<Vec<Content>>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 struct Font {
     size: usize,
     bold: bool,
 }
+impl Font {
+    const H1_DEFAULT_SIZE: usize = 36;
+    const H2_DEFAULT_SIZE: usize = 28;
+    const H3_DEFAULT_SIZE: usize = 24;
+    const NORMAL_SIZE: usize = 18;
+    fn h1() -> Self {
+        Self {
+            size: Self::H1_DEFAULT_SIZE,
+            bold: true,
+        }
+    }
+    fn h2() -> Self {
+        Self {
+            size: Self::H2_DEFAULT_SIZE,
+            bold: true,
+        }
+    }
+    fn h3() -> Self {
+        Self {
+            size: Self::H3_DEFAULT_SIZE,
+            bold: true,
+        }
+    }
+    fn normal() -> Self {
+        Self {
+            size: Self::NORMAL_SIZE,
+            bold: false,
+        }
+    }
+}
 
 impl Default for Font {
     fn default() -> Self {
-        Self {
-            size: 18,
-            bold: false,
-        }
+        Self::normal()
     }
 }
 
@@ -165,7 +192,7 @@ impl Content {
                 Text::H1(_) => content.font = config.case_h1().font,
                 Text::H2(_) => content.font = config.case_h2().font,
                 Text::H3(_) => content.font = config.case_h3().font,
-                Text::Normal(_) => {}
+                Text::Normal(_) => content.font = config.case_normal().font,
             }
             content
         }
@@ -213,44 +240,60 @@ impl Content {
         }
     }
 }
-#[derive(Debug, Clone)]
-pub struct ContentConfig {}
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct ContentConfig {
+    h1: Font,
+    h2: Font,
+    h3: Font,
+    normal: Font,
+}
+
+impl ContentConfig {
+    fn h1(self, font: Font) -> Self {
+        Self { h1: font, ..self }
+    }
+    fn h2(self, font: Font) -> Self {
+        Self { h2: font, ..self }
+    }
+    fn h3(self, font: Font) -> Self {
+        Self { h3: font, ..self }
+    }
+    fn normal(self, font: Font) -> Self {
+        Self {
+            normal: font,
+            ..self
+        }
+    }
+}
 impl Default for ContentConfig {
     fn default() -> Self {
-        Self {}
+        Self {
+            h1: Font::h1(),
+            h2: Font::h2(),
+            h3: Font::h3(),
+            normal: Font::normal(),
+        }
     }
 }
 impl ContentConfig {
     fn case_h1(&self) -> ContentConfigValue {
         ContentConfigValue {
-            font: Font {
-                bold: true,
-                size: 28,
-            },
+            font: self.h1.clone(),
         }
     }
     fn case_h2(&self) -> ContentConfigValue {
         ContentConfigValue {
-            font: Font {
-                bold: true,
-                size: 28,
-            },
+            font: self.h2.clone(),
         }
     }
     fn case_h3(&self) -> ContentConfigValue {
         ContentConfigValue {
-            font: Font {
-                bold: true,
-                size: 28,
-            },
+            font: self.h3.clone(),
         }
     }
     fn case_normal(&self) -> ContentConfigValue {
         ContentConfigValue {
-            font: Font {
-                bold: false,
-                size: 18,
-            },
+            font: self.normal.clone(),
         }
     }
 }
@@ -339,12 +382,50 @@ mod tests {
     mod config_test {
         use crate::{
             md::{Component, Text},
-            pptx::{Content, ContentConfig},
+            pptx::{Content, ContentConfig, Font},
         };
+        #[test]
+        fn configの設定は自由に変更できる() {
+            let config = ContentConfig::default()
+                .h1(Font {
+                    bold: true,
+                    size: 32,
+                })
+                .h2(Font {
+                    bold: false,
+                    size: 100,
+                })
+                .h3(Font {
+                    bold: true,
+                    size: 110,
+                })
+                .normal(Font {
+                    bold: true,
+                    size: 180,
+                });
+            let component = Component::Text(Text::H1("Title"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+            assert_eq!(sut[0].font.bold, true);
+            assert_eq!(sut[0].font.size, 32);
+
+            let component = Component::Text(Text::H2("Hello World"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+            assert_eq!(sut[0].font.bold, false);
+            assert_eq!(sut[0].font.size, 100);
+
+            let component = Component::Text(Text::H3("Hello World"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+            assert_eq!(sut[0].font.bold, true);
+            assert_eq!(sut[0].font.size, 110);
+
+            let component = Component::Text(Text::Normal("Hello World"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+            assert_eq!(sut[0].font.bold, true);
+            assert_eq!(sut[0].font.size, 180);
+        }
 
         #[test]
-        #[allow(non_snake_case)]
-        fn ContentConfigはcontentのfontの設定を自由に設定するための構造体_ver_text() {
+        fn contentのfontの設定を列挙子によって切り分ける() {
             let config = ContentConfig::default();
             let component = Component::Text(Text::H1("Title"));
             let sut = Content::from_component_with_config(&component, config.clone());
