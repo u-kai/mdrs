@@ -122,9 +122,9 @@ pub struct Content {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-struct Font {
-    size: usize,
-    bold: bool,
+pub struct Font {
+    pub size: usize,
+    pub bold: bool,
 }
 impl Font {
     const H1_DEFAULT_SIZE: usize = 36;
@@ -164,6 +164,13 @@ impl Default for Font {
 }
 
 impl Content {
+    fn new_with_font(text: impl Into<String>, font: Font) -> Self {
+        Self {
+            text: text.into(),
+            font,
+            children: None,
+        }
+    }
     fn to_bold(&mut self) {
         self.font.bold = true;
     }
@@ -171,17 +178,21 @@ impl Content {
         self.font.size = size;
     }
     fn from_component_with_config(component: &Component<'_>, config: ContentConfig) -> Vec<Self> {
-        fn item_list_to_contents(item_list: &ItemList<'_>, config: &ContentConfig) -> Vec<Content> {
+        fn item_list_to_contents(
+            item_list: &ItemList<'_>,
+            config: &ContentConfig,
+            level: usize,
+        ) -> Vec<Content> {
             let mut result = vec![];
             for item in item_list.items() {
-                let mut content = Content::new(item.value());
+                let font = config.list_font(&item.value, level);
+                let mut content = Content::new_with_font(item.value(), font);
                 if item.children().items.len() == 0 {
                     result.push(content);
                     continue;
                 }
                 let children = item.children();
-                content.children = Some(item_list_to_contents(children, config));
-                content.font = config.case_h2().font;
+                content.children = Some(item_list_to_contents(children, config, level + 1));
                 result.push(content);
             }
             result
@@ -197,7 +208,7 @@ impl Content {
             content
         }
         match component {
-            Component::List(list) => item_list_to_contents(list, &config),
+            Component::List(list) => item_list_to_contents(list, &config, 0),
             Component::Text(text) => {
                 vec![text_to_content(text, &config)]
             }
@@ -246,9 +257,34 @@ pub struct ContentConfig {
     h2: Font,
     h3: Font,
     normal: Font,
+    per_level: usize,
 }
 
+impl Default for ContentConfig {
+    fn default() -> Self {
+        Self {
+            h1: Font::h1(),
+            h2: Font::h2(),
+            h3: Font::h3(),
+            normal: Font::normal(),
+            per_level: 4,
+        }
+    }
+}
 impl ContentConfig {
+    fn list_font(&self, text: &Text<'_>, level: usize) -> Font {
+        let mut font = self.text_font(text);
+        font.size = font.size - (level * self.per_level);
+        font
+    }
+    fn text_font(&self, text: &Text<'_>) -> Font {
+        match text {
+            Text::H1(_) => self.h1.clone(),
+            Text::H2(_) => self.h2.clone(),
+            Text::H3(_) => self.h3.clone(),
+            Text::Normal(_) => self.normal.clone(),
+        }
+    }
     fn h1(self, font: Font) -> Self {
         Self { h1: font, ..self }
     }
@@ -264,18 +300,6 @@ impl ContentConfig {
             ..self
         }
     }
-}
-impl Default for ContentConfig {
-    fn default() -> Self {
-        Self {
-            h1: Font::h1(),
-            h2: Font::h2(),
-            h3: Font::h3(),
-            normal: Font::normal(),
-        }
-    }
-}
-impl ContentConfig {
     fn case_h1(&self) -> ContentConfigValue {
         ContentConfigValue {
             font: self.h1.clone(),
@@ -381,11 +405,11 @@ mod tests {
     }
     mod config_test {
         use crate::{
-            md::{Component, Text},
+            md::{Component, Item, ItemList, Text},
             pptx::{Content, ContentConfig, Font},
         };
         #[test]
-        fn configの設定は自由に変更できる() {
+        fn configの設定は自由に変更できる_ver_text() {
             let config = ContentConfig::default()
                 .h1(Font {
                     bold: true,
@@ -425,7 +449,33 @@ mod tests {
         }
 
         #[test]
-        fn contentのfontの設定を列挙子によって切り分ける() {
+        #[allow(non_snake_case)]
+        fn ItemListのcontentのfontは子供のfontほど小さくなる() {
+            let config = ContentConfig::default();
+            let bottom = Item {
+                value: Text::H1("Because of no GC!!"),
+                children: ItemList { items: vec![] },
+            };
+            let middle = Item {
+                value: Text::Normal("So fast!!"),
+                children: ItemList {
+                    items: vec![bottom],
+                },
+            };
+            let top = Item {
+                value: Text::Normal("Rust is very good language!!"),
+                children: ItemList {
+                    items: vec![middle],
+                },
+            };
+            let component = Component::List(ItemList { items: vec![top] });
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.size, config.case_normal().font.size);
+        }
+        #[test]
+        #[allow(non_snake_case)]
+        fn contentのfontの設定をTextの列挙子によって切り分ける() {
             let config = ContentConfig::default();
             let component = Component::Text(Text::H1("Title"));
             let sut = Content::from_component_with_config(&component, config.clone());
