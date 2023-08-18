@@ -117,10 +117,32 @@ impl Slide {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Content {
     text: String,
+    font: Font,
     children: Option<Vec<Content>>,
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Font {
+    size: usize,
+    bold: bool,
+}
+
+impl Default for Font {
+    fn default() -> Self {
+        Self {
+            size: 18,
+            bold: false,
+        }
+    }
+}
+
 impl Content {
+    fn to_bold(&mut self) {
+        self.font.bold = true;
+    }
+    fn change_size(&mut self, size: usize) {
+        self.font.size = size;
+    }
     fn from_component(component: &Component<'_>) -> Vec<Self> {
         fn item_list_to_contents(item_list: &ItemList<'_>) -> Vec<Content> {
             let mut result = vec![];
@@ -145,6 +167,7 @@ impl Content {
         Self {
             text: text.into(),
             children: None,
+            font: Font::default(),
         }
     }
     fn add_child(&mut self, child: impl Into<String>) {
@@ -247,6 +270,23 @@ mod tests {
             pptx::Content,
         };
 
+        #[test]
+        fn contentの初期fontはサイズが18でboldではない() {
+            let mut sut = Content::new("Hello World");
+
+            assert_eq!(sut.font.size, 18);
+            assert!(!sut.font.bold);
+        }
+        #[test]
+        fn contentはfontの設定が可能() {
+            let mut sut = Content::new("Hello World");
+
+            sut.change_size(28);
+            sut.to_bold();
+
+            assert_eq!(sut.font.size, 28);
+            assert!(sut.font.bold);
+        }
         #[test]
         #[allow(non_snake_case)]
         fn contentはComponentのTextから生成できる() {
