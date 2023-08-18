@@ -142,8 +142,16 @@ impl From<Page<'_>> for Slide {
         let component_num = page.components().count();
 
         if component_num == 1 {
-            if let Some(Component::Text(Text::H1(text))) = components.next() {
-                return Slide::title_only(*text);
+            match components.next().unwrap() {
+                Component::Text(Text::H1(title)) => {
+                    return Slide::title_only(*title);
+                }
+                Component::Text(text) => {
+                    let mut result = Slide::blank();
+                    result.add_content(Content::new(text.value()));
+                    return result;
+                }
+                _ => todo!(),
             }
         }
         let mut result = Slide::blank();
@@ -166,6 +174,20 @@ mod tests {
             md::{Component, Markdown, Page, Text},
             pptx::Slide,
         };
+        #[test]
+        fn pageの要素が一つかつその要素がheading1以外であればblankスライドを生成してcontentに追加する(
+        ) {
+            let content_str = "Rust is very good language!!";
+            let content = Component::Text(Text::H2(content_str));
+            let components = [content];
+            let page = Page::new(&components);
+
+            let sut = Slide::from(page);
+
+            assert_eq!(sut.r#type, "blank");
+            assert_eq!(sut.title, None);
+            assert_eq!(sut.content[0].text, content_str);
+        }
         #[test]
         fn pageの要素が一つかつその要素がheading1であればtitleスライドを生成する() {
             let title_str = "Rust is very good language!!";
