@@ -160,6 +160,7 @@ impl Content {
         }
         match component {
             Component::List(list) => item_list_to_contents(list),
+            Component::Text(text) => vec![Content::new(text.value())],
             _ => todo!(),
         }
     }
@@ -175,14 +176,6 @@ impl Content {
             children.push(Content::new(child));
         } else {
             self.children = Some(vec![Content::new(child)]);
-        }
-    }
-}
-impl From<&Component<'_>> for Content {
-    fn from(component: &Component<'_>) -> Self {
-        match component {
-            Component::Text(text) => Self::new(text.value()),
-            _ => todo!(),
         }
     }
 }
@@ -217,6 +210,7 @@ impl From<Page<'_>> for Slide {
         result
     }
 }
+
 #[cfg(test)]
 mod tests {
     mod slide_test {
@@ -292,9 +286,9 @@ mod tests {
         fn contentはComponentのTextから生成できる() {
             let component = Component::Text(Text::H2("Hello World"));
 
-            let sut = Content::from(&component);
+            let sut = Content::from_component(&component);
 
-            assert_eq!(sut.text, "Hello World");
+            assert_eq!(sut[0].text, "Hello World");
         }
         #[test]
         #[allow(non_snake_case)]
