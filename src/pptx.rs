@@ -143,6 +143,33 @@ impl Content {
     fn change_size(&mut self, size: usize) {
         self.font.size = size;
     }
+    fn from_component_with_config(component: &Component<'_>, config: ContentConfig) -> Vec<Self> {
+        fn item_list_to_contents(item_list: &ItemList<'_>, config: &ContentConfig) -> Vec<Content> {
+            let mut result = vec![];
+            for item in item_list.items() {
+                let mut content = Content::new(item.value());
+                if item.children().items.len() == 0 {
+                    result.push(content);
+                    continue;
+                }
+                let children = item.children();
+                content.children = Some(item_list_to_contents(children, config));
+                content.font = config.case_h2().font;
+                result.push(content);
+            }
+            result
+        }
+        match component {
+            Component::List(list) => item_list_to_contents(list, &config),
+            Component::Text(Text::H2(text)) => {
+                let mut content = Content::new(*text);
+                content.font = config.case_h2().font;
+                vec![content]
+            }
+            Component::Text(text) => vec![Content::new(text.value())],
+            _ => todo!(),
+        }
+    }
     fn from_component(component: &Component<'_>) -> Vec<Self> {
         fn item_list_to_contents(item_list: &ItemList<'_>) -> Vec<Content> {
             let mut result = vec![];
@@ -178,6 +205,26 @@ impl Content {
             self.children = Some(vec![Content::new(child)]);
         }
     }
+}
+#[derive(Debug, Clone)]
+pub struct ContentConfig {}
+impl Default for ContentConfig {
+    fn default() -> Self {
+        Self {}
+    }
+}
+impl ContentConfig {
+    fn case_h2(&self) -> ContentConfigValue {
+        ContentConfigValue {
+            font: Font {
+                bold: true,
+                size: 28,
+            },
+        }
+    }
+}
+struct ContentConfigValue {
+    font: Font,
 }
 
 impl From<Page<'_>> for Slide {
@@ -261,7 +308,7 @@ mod tests {
     mod content_test {
         use crate::{
             md::{Component, Item, ItemList, Text},
-            pptx::Content,
+            pptx::{Content, ContentConfig},
         };
 
         #[test]
@@ -280,6 +327,15 @@ mod tests {
 
             assert_eq!(sut.font.size, 28);
             assert!(sut.font.bold);
+        }
+        #[test]
+        fn contentのfontの設定を自由に設定できる() {
+            let config = ContentConfig::default();
+            let component = Component::Text(Text::H2("Hello World"));
+            let sut = Content::from_component_with_config(&component, config.clone());
+
+            assert_eq!(sut[0].font.bold, config.case_h2().font.bold);
+            assert_eq!(sut[0].font.size, config.case_h2().font.size);
         }
         #[test]
         #[allow(non_snake_case)]
