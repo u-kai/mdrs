@@ -2,57 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::md::{Component, ItemList, Markdown, Page, Text};
 
-//fn page_to_slide(page: Vec<Component>) -> Slide {
-//    let mut result = Slide::blank();
-//    for (i, component) in page.into_iter().enumerate() {
-//        match component {
-//            Component::List(list) => {
-//                for item in list.items() {
-//                    let mut content = Content::new(item.value());
-//                    for child in item.children() {
-//                        content.add_child(child.value());
-//                    }
-//                }
-//            }
-//            Component::SplitLine => panic!("SplitLine is not allowed in page"),
-//            Component::Text(text) if i == 0 => match text {
-//                Text::Normal(text) => {
-//                    result.add_content(Content::new(text));
-//                }
-//                text => {
-//                    result = Slide::title_only(text.value().to_string());
-//                }
-//            },
-//            Component::Text(text) => match text {
-//                Text::Normal(text) => {
-//                    result.add_content(Content::new(text));
-//                }
-//                _ => {
-//                    result.add_content(Content::new(text.value()));
-//                }
-//            },
-//        }
-//    }
-//    result
-//}
-//fn md_to_slides(md: Markdown<'_>) -> Vec<Slide> {
-//    let mut result = Vec::new();
-//    let pages = md.components().cloned().collect::<Vec<_>>();
-//    let mut pages = pages.split(|c| c == &Component::SplitLine);
-//
-//    let init = pages.next().unwrap();
-//    match init {
-//        Component::Text(Text::H1(title)) => {
-//            result.push(Slide::title_only(*title));
-//        }
-//        _ => {}
-//    }
-//    for page in pages {
-//        match
-//    }
-//    result
-//}
-
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Pptx {
+    filename: String,
+    slides: Vec<Slide>,
+}
 impl Pptx {
     pub fn from_md_with_config(
         md: Markdown<'_>,
@@ -86,11 +40,6 @@ impl Pptx {
     pub fn add_slide(&mut self, slide: Slide) {
         self.slides.push(slide);
     }
-}
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct Pptx {
-    filename: String,
-    slides: Vec<Slide>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -402,7 +351,6 @@ mod tests {
             pptx::{ContentConfig, Font, Pptx},
         };
 
-        use super::*;
         #[test]
         fn mdからpptxを作成可能() {
             let mut lines = String::new();

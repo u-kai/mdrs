@@ -1,5 +1,4 @@
 use std::iter::Peekable;
-use std::slice::Split;
 use std::str::Lines;
 
 #[derive(Debug, PartialEq)]
@@ -136,6 +135,8 @@ impl<'a> ItemList<'a> {
                 let _ = lines.next().unwrap();
                 continue;
             }
+
+            // 他の要素がきた場合はlineを消費せずに終了
             if Self::is_end_loop(line) {
                 return None;
             }
@@ -176,8 +177,10 @@ impl<'a> ItemList<'a> {
         line.is_empty()
     }
     fn is_end_loop(line: &str) -> bool {
-        // 空行ではないかつマークが含まれていない場合は終了
-        !line.is_empty() && !Self::MARKS.iter().any(|mark| line.contains(mark))
+        // 空行ではないかつ空白以外の最初の文字がMARKと異なっていれば終了
+        // またsplit_lineの場合は文字が一緒なのでsplit_lineの場合も考慮する必要がある
+        let first_str = &line.trim_start()[0..1];
+        SplitLine::parse(line).is_some() || (!line.is_empty() && !["-", "*"].contains(&first_str))
     }
     fn start_condition(indent: usize) -> String {
         format!("{}{}", " ".repeat(indent), "- ")
@@ -262,17 +265,22 @@ impl SplitLine {
 mod tests {
     use super::*;
     #[test]
-    fn loop_() {
+    fn 改行文字がなければ一つの行として評価する() {
         let mut lines = String::new();
-        lines.push_str("# Title\n");
-        lines.push_str("---\n");
-        lines.push_str("# Rust is very good language!!\n");
-        lines.push_str("- So fast\n");
-        lines.push_str("    - Because of no GC\n");
-        lines.push_str("- So safe\n");
-        lines.push_str("    - Because of borrow checker\n");
-        lines.push_str("---\n");
+        lines.push_str("# Title");
+        lines.push_str("---");
+        lines.push_str("# Rust is very good language!!");
+        lines.push_str("- So fast");
+        lines.push_str("    - Because of no GC");
+        lines.push_str("- So safe");
+        lines.push_str("    - Because of borrow checker");
+        lines.push_str("---");
         let sut = Markdown::parse(&lines);
+
+        let mut sut = sut.components();
+        let heading = sut.next().unwrap();
+
+        assert_eq!(heading, &Component::Text(Text::H1("Title---# Rust is very good language!!- So fast    - Because of no GC- So safe    - Because of borrow checker---")));
     }
     #[test]
     fn 複数の行をparseできる() {
@@ -481,7 +489,6 @@ mod tests {
         fn 文字列からマークが3以上はh3としてparseできる() {
             let title = "#### Hello World";
             let result = Text::parse(title);
-
             assert_eq!(result, Text::H3("Hello World"));
         }
     }
@@ -506,5 +513,11 @@ mod tests {
 
             assert_eq!(sut.to_str(), "---");
         }
+    }
+    #[test]
+    fn learning_改行文字がない時のlinesの挙動を確認() {
+        let mut lines = "foo".lines().peekable();
+        assert_eq!(lines.next(), Some("foo"));
+        assert_eq!(lines.next(), None);
     }
 }
