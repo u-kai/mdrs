@@ -262,6 +262,19 @@ impl SplitLine {
 mod tests {
     use super::*;
     #[test]
+    fn loop_() {
+        let mut lines = String::new();
+        lines.push_str("# Title\n");
+        lines.push_str("---\n");
+        lines.push_str("# Rust is very good language!!\n");
+        lines.push_str("- So fast\n");
+        lines.push_str("    - Because of no GC\n");
+        lines.push_str("- So safe\n");
+        lines.push_str("    - Because of borrow checker\n");
+        lines.push_str("---\n");
+        let sut = Markdown::parse(&lines);
+    }
+    #[test]
     fn 複数の行をparseできる() {
         let mut lines = String::new();
         lines.push_str("# Hello World\n");

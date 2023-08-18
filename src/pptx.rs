@@ -53,17 +53,14 @@ use crate::md::{Component, ItemList, Markdown, Page, Text};
 //    result
 //}
 
-fn md_to_pptx(md: Markdown<'_>, filename: impl Into<String>) -> Pptx {
-    let mut result = Pptx::new(filename);
-    let mut page_num = 0;
-    for component in md.components() {}
-
-    result
-}
-
 impl Pptx {
     pub fn from_md(md: Markdown<'_>, filename: impl Into<String>) -> Self {
-        md_to_pptx(md, filename)
+        let pages = md.pages();
+        let slides = pages.into_iter().map(Slide::from).collect();
+        Self {
+            filename: filename.into(),
+            slides,
+        }
     }
     pub fn new(filename: impl Into<String>) -> Self {
         Self {
@@ -91,7 +88,9 @@ impl Slide {
     fn from_page_with_config(page: Page<'_>, config: &ContentConfig) -> Self {
         let mut components = page.components();
         let component_num = page.components().count();
-
+        if component_num == 0 {
+            return Slide::blank();
+        }
         if component_num == 1 {
             match components.next().unwrap() {
                 Component::Text(Text::H1(title)) => {
@@ -382,7 +381,30 @@ impl From<Page<'_>> for Slide {
 
 #[cfg(test)]
 mod tests {
-    mod slide_test {
+    mod pptx_tests {
+        use crate::{md::Markdown, pptx::Pptx};
+
+        use super::*;
+        #[test]
+        fn mdからpptxを作成可能() {
+            let mut lines = String::new();
+            lines.push_str("# Title\n");
+            lines.push_str("---\n");
+            lines.push_str("# Rust is very good language!!\n");
+            lines.push_str("- So fast\n");
+            lines.push_str("    - Because of no GC\n");
+            lines.push_str("- So safe\n");
+            lines.push_str("    - Because of borrow checker\n");
+            lines.push_str("---\n");
+            let md = Markdown::parse(&lines);
+            let sut = Pptx::from_md(md, "test.pptx");
+
+            assert_eq!(sut.slides.len(), 3);
+        }
+        #[test]
+        fn configを設定可能() {}
+    }
+    mod slide_tests {
         use super::*;
         use crate::{
             md::{Component, Item, ItemList, Markdown, Page, Text},
