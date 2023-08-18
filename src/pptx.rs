@@ -199,12 +199,7 @@ impl Content {
         }
         fn text_to_content(text: &Text<'_>, config: &ContentConfig) -> Content {
             let mut content = Content::new(text.value());
-            match text {
-                Text::H1(_) => content.font = config.case_h1().font,
-                Text::H2(_) => content.font = config.case_h2().font,
-                Text::H3(_) => content.font = config.case_h3().font,
-                Text::Normal(_) => content.font = config.case_normal().font,
-            }
+            content.font = config.text_font(text);
             content
         }
         match component {
@@ -472,6 +467,27 @@ mod tests {
             let sut = Content::from_component_with_config(&component, config.clone());
 
             assert_eq!(sut[0].font.size, config.case_normal().font.size);
+            assert!(
+                sut[0].children.as_ref().unwrap()[0].font.size < config.case_normal().font.size
+            );
+            assert!(
+                sut[0].children.as_ref().unwrap()[0]
+                    .children
+                    .as_ref()
+                    .unwrap()[0]
+                    .font
+                    .size
+                    < config.case_h1().font.size
+            );
+            assert_eq!(
+                sut[0].children.as_ref().unwrap()[0]
+                    .children
+                    .as_ref()
+                    .unwrap()[0]
+                    .font
+                    .bold,
+                config.case_h1().font.bold
+            );
         }
         #[test]
         #[allow(non_snake_case)]
@@ -502,12 +518,12 @@ mod tests {
     mod content_test {
         use crate::{
             md::{Component, Item, ItemList, Text},
-            pptx::{Content, ContentConfig},
+            pptx::Content,
         };
 
         #[test]
         fn contentの初期fontはサイズが18でboldではない() {
-            let mut sut = Content::new("Hello World");
+            let sut = Content::new("Hello World");
 
             assert_eq!(sut.font.size, 18);
             assert!(!sut.font.bold);
@@ -567,6 +583,9 @@ mod tests {
             let sut = Content::from_component(&component);
 
             assert_eq!(sut[0].text, "Root1");
+            assert_eq!(sut[0].children.as_ref().unwrap()[0].text, "Parent1");
+            assert_eq!(sut[1].text, "Root2");
+            assert_eq!(sut[1].children.as_ref().unwrap()[0].text, "Parent2");
         }
     }
 
