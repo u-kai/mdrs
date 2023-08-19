@@ -38,16 +38,13 @@ impl<'a> Markdown<'a> {
         let mut lines = input.lines().peekable();
 
         while let Some(line) = lines.peek() {
-            println!("line: {}", line);
             if Markdown::is_skip(line) {
-                println!("skip line: {}", line);
                 // consume line
                 let _ = lines.next().unwrap();
                 continue;
             }
 
             if let Some(_split_line) = SplitLine::parse(line) {
-                println!("split line: {}", line);
                 components.push(Component::SplitLine);
                 // consume line
                 let _ = lines.next().unwrap();
@@ -56,14 +53,12 @@ impl<'a> Markdown<'a> {
 
             if line.contains("- ") || line.contains("* ") {
                 if let Some(component) = Markdown::parse_list(&mut lines) {
-                    println!("list: {:#?}", component);
                     components.push(component);
                     continue;
                 }
             }
             // それ以外の場合はテキストとして追加
             let line = lines.next().unwrap();
-            println!("other line: {}", line);
             components.push(Markdown::parse_text(line));
         }
 
@@ -73,7 +68,6 @@ impl<'a> Markdown<'a> {
         line.is_empty()
     }
     fn parse_list(lines: &mut Peekable<Lines<'a>>) -> Option<Component<'a>> {
-        println!("parse_list");
         let list = ItemList::parse(lines, 0);
         if list.item_len() > 0 {
             Some(Component::List(list))
@@ -111,7 +105,6 @@ impl<'a> ItemList<'a> {
     fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
         let mut result = Self::new();
         while let Some(line) = lines.peek() {
-            println!("list-first-line: {}", line);
             if Self::is_skip(line) {
                 let _ = lines.next().unwrap();
                 continue;
@@ -121,7 +114,6 @@ impl<'a> ItemList<'a> {
             }
             // 指定されているインデントと同じ場合は同じ階層として追加
             if Self::is_item_line(line, indent) {
-                println!("is_item_line: {} , indet {}", line, indent);
                 let line = lines.next().unwrap();
                 let mut item = Self::get_item_from_line(line, indent);
                 // 子供がいれば再起的に子供を追加
