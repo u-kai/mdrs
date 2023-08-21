@@ -51,7 +51,8 @@ impl<'a> Markdown<'a> {
                 continue;
             }
 
-            if line.contains("- ") || line.contains("* ") {
+            if ItemList::is_item_list_line(line) {
+                println!("line {}", line);
                 if let Some(component) = Markdown::parse_list(&mut lines) {
                     components.push(component);
                     continue;
@@ -92,15 +93,26 @@ pub struct ItemList<'a> {
     pub(crate) items: Vec<Item<'a>>,
 }
 impl<'a> ItemList<'a> {
-    const MARKS: [&'static str; 2] = ["-", "*"];
-    pub fn items(&'a self) -> impl Iterator<Item = &'a Item<'a>> {
-        self.items.iter()
-    }
+    const MARKS: [&'static str; 2] = ["- ", "* "];
+
     fn new() -> ItemList<'a> {
         ItemList { items: Vec::new() }
     }
-    fn add(&mut self, item: Item<'a>) {
+    fn add_item(&mut self, item: Item<'a>) {
         self.items.push(item);
+    }
+    fn add_child(&mut self, children: Self) {
+        if let Some(parent) = self.items.last_mut() {
+            children.items.into_iter().for_each(|child| {
+                parent.add_child(child);
+            })
+        };
+    }
+    fn add_sibling(&mut self, sibling: Self) {
+        sibling
+            .items
+            .into_iter()
+            .for_each(|sibling_item| self.add_item(sibling_item))
     }
     fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
         let mut result = Self::new();
@@ -109,101 +121,92 @@ impl<'a> ItemList<'a> {
                 let _ = lines.next().unwrap();
                 continue;
             }
-            if Self::is_end_loop(line) {
+            // list line以外の場合はlineを消費せずに終了する
+            if !Self::is_item_list_line(line) {
+                return result;
+            }
+            // 自分より親のインデントの場合はlineを消費せずに終了
+            if Self::is_parent_indent(line, indent) {
                 return result;
             }
             // 指定されているインデントと同じ場合は同じ階層として追加
-            if Self::is_item_line(line, indent) {
+            if Self::is_same_indent(line, indent) {
                 let line = lines.next().unwrap();
-                let mut item = Self::get_item_from_line(line, indent);
-                // 子供がいれば再起的に子供を追加
-                if let Some(child) = Self::get_children_from_line(lines, indent) {
-                    item.add_child(child);
-                }
-                result.add(item);
+                let mut sibling = Self::from_line(line, indent);
+                let children = Self::parse_children(lines, indent);
+                sibling.add_child(children);
+
+                result.add_sibling(sibling);
                 continue;
             }
 
-            // 自分より親のインデントの場合はlineを消費せずに終了
-            if Self::indent_count(line) < indent {
-                return result;
-            }
             // 自分より子のインデントの場合は再起的に子供を追加
-            if let Some(child) = Self::get_children_from_line(lines, indent) {
-                result.add(child);
+            if Self::is_children_indent(line, indent) {
+                let indent_count = Self::indent_count(line);
+                if result.item_len() == 0 {
+                    result = Self::parse(lines, indent_count);
+                    continue;
+                }
+                let line = lines.next().unwrap();
+                let mut children = Self::from_line(line, indent_count);
+                children.add_child(Self::parse(lines, indent_count));
+                result.add_child(children);
             }
         }
         result
     }
-    fn get_children_from_line(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Option<Item<'a>> {
-        while let Some(line) = lines.peek() {
-            if Self::is_skip(line) {
-                let _ = lines.next().unwrap();
-                continue;
-            }
+    fn parse_children(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
+        Self::parse(lines, indent + 1)
+    }
 
-            // 他の要素がきた場合はlineを消費せずに終了
-            if Self::is_end_loop(line) {
-                return None;
-            }
-            // インデントが同じ場合はlineを消費せずにNoneを返す
-            if Self::is_item_line(line, indent) {
-                return None;
-            }
-
-            let indent_count = Self::indent_count(line);
-
-            // 自分より上位のインデントの場合はlineを消費せずにNoneを返す
-            if indent_count < indent {
-                return None;
-            }
-            // インデントが深くなった場合は子供として追加
-            if indent < indent_count && Self::is_item_line(line, indent_count) {
-                let line = lines.next().unwrap();
-                let mut child = Self::get_item_from_line(line, indent_count);
-                if let Some(grand_child) = Self::get_children_from_line(lines, indent_count) {
-                    child.add_child(grand_child);
-                }
-                return Some(child);
-            }
-        }
-        None
-    }
-    fn item_len(&self) -> usize {
-        self.items.len()
-    }
-    fn is_item_line(line: &str, indent: usize) -> bool {
-        line.starts_with(&Self::start_condition(indent))
-    }
-    fn indent_count(line: &str) -> usize {
-        line.chars().take_while(|c| c == &' ').count()
-    }
     fn is_skip(line: &str) -> bool {
         // 空行の場合はスキップ
         line.is_empty()
     }
-    fn is_end_loop(line: &str) -> bool {
+    fn is_same_indent(line: &str, indent: usize) -> bool {
+        line.starts_with(&Self::start_condition(indent))
+    }
+    fn is_parent_indent(line: &str, indent: usize) -> bool {
+        let indent_count = Self::indent_count(line);
+        indent_count < indent
+    }
+    fn is_children_indent(line: &str, indent: usize) -> bool {
+        let indent_count = Self::indent_count(line);
+        indent_count > indent
+    }
+    fn indent_count(line: &str) -> usize {
+        line.chars().take_while(|c| c == &' ').count()
+    }
+    fn is_item_list_line(line: &str) -> bool {
         // 空行ではないかつ空白以外の最初の文字がMARKと異なっていれば終了
         // またsplit_lineの場合は文字が一緒なのでsplit_lineの場合も考慮する必要がある
         fn is_split_line(line: &str) -> bool {
             SplitLine::parse(line).is_some()
         }
-        fn first_char_is_list_symbol(line: &str) -> bool {
-            let first_str = line.trim_start().get(0..1);
+        fn first_pattern_is_list_symbol(line: &str) -> bool {
+            let first_str = line.trim_start().get(0..2);
             if let Some(first_str) = first_str {
                 ItemList::MARKS.iter().any(|s| *s == first_str)
             } else {
                 false
             }
         }
-        is_split_line(line) || !line.is_empty() && !first_char_is_list_symbol(line)
+        !is_split_line(line) && first_pattern_is_list_symbol(line)
     }
     fn start_condition(indent: usize) -> String {
         format!("{}{}", " ".repeat(indent), "- ")
     }
-    fn get_item_from_line(line: &'a str, indent: usize) -> Item<'a> {
+    fn from_line(line: &'a str, indent: usize) -> Self {
         let condition = Self::start_condition(indent);
-        Item::new(line.trim_start_matches(&condition))
+        Self {
+            items: vec![Item::new(line.trim_start_matches(&condition))],
+        }
+    }
+    pub fn items(&'a self) -> impl Iterator<Item = &'a Item<'a>> {
+        self.items.iter()
+    }
+    fn item_len(&self) -> usize {
+        self.items.len()
     }
 }
 
@@ -226,7 +229,7 @@ impl<'a> Item<'a> {
         }
     }
     fn add_child(&mut self, item: Self) {
-        self.children.add(item);
+        self.children.add_item(item);
     }
 }
 
@@ -346,7 +349,7 @@ mod tests {
         let mut list = Item::new("foo");
         list.add_child(Item::new("bar"));
         let mut expected = ItemList::new();
-        expected.add(list);
+        expected.add_item(list);
         assert_eq!(list_foo, &Component::List(expected));
 
         let split = sut.next().unwrap();
@@ -357,7 +360,7 @@ mod tests {
 
         let list_hoge = sut.next().unwrap();
         let mut expected = ItemList::new();
-        expected.add(Item::new("hoge"));
+        expected.add_item(Item::new("hoge"));
         assert_eq!(list_hoge, &Component::List(expected));
     }
     #[test]
@@ -431,7 +434,7 @@ mod tests {
             let sut = ItemList::parse(&mut list, 0);
 
             let mut expected = ItemList::new();
-            expected.add(Item::new("# foo"));
+            expected.add_item(Item::new("# foo"));
 
             assert_eq!(sut.items[0].value, Text::H1("foo"));
             assert_eq!(sut, expected);
@@ -460,8 +463,8 @@ mod tests {
             let mut chome = Item::new("chome");
             chome.add_child(Item::new("chome_child"));
             let mut expected = ItemList::new();
-            expected.add(foo);
-            expected.add(chome);
+            expected.add_item(foo);
+            expected.add_item(chome);
 
             assert_eq!(sut, expected);
         }
@@ -488,8 +491,8 @@ mod tests {
             let chome = Item::new("chome");
 
             let mut list = ItemList::new();
-            list.add(foo);
-            list.add(chome);
+            list.add_item(foo);
+            list.add_item(chome);
 
             assert_eq!(sut, list);
         }
@@ -500,7 +503,7 @@ mod tests {
             let sut = ItemList::parse(&mut list, 0);
 
             let mut expected = ItemList::new();
-            expected.add(Item::new("foo"));
+            expected.add_item(Item::new("foo"));
 
             assert_eq!(sut, expected);
         }
