@@ -114,7 +114,7 @@ impl<'a> ItemList<'a> {
             .into_iter()
             .for_each(|sibling_item| self.add_item(sibling_item))
     }
-    fn parse(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
+    fn parse(lines: &mut Peekable<Lines<'a>>, mut indent: usize) -> Self {
         let mut result = Self::new();
         while let Some(line) = lines.peek() {
             if Self::is_skip(line) {
@@ -143,7 +143,9 @@ impl<'a> ItemList<'a> {
             // 自分より子のインデントの場合は再起的に子供を追加
             if Self::is_children_indent(line, indent) {
                 let indent_count = Self::indent_count(line);
+                // そもそもresultにまだitemが存在しなければ当該indentが最初のitemになり，同じindentの要素をparseするようにする
                 if result.item_len() == 0 {
+                    indent = indent_count;
                     result = Self::parse(lines, indent_count);
                     continue;
                 }
@@ -178,20 +180,12 @@ impl<'a> ItemList<'a> {
         line.chars().take_while(|c| c == &' ').count()
     }
     fn is_item_list_line(line: &str) -> bool {
-        // 空行ではないかつ空白以外の最初の文字がMARKと異なっていれば終了
-        // またsplit_lineの場合は文字が一緒なのでsplit_lineの場合も考慮する必要がある
-        fn is_split_line(line: &str) -> bool {
-            SplitLine::parse(line).is_some()
+        let first_str = line.trim_start().get(0..2);
+        if let Some(first_str) = first_str {
+            ItemList::MARKS.iter().any(|s| *s == first_str)
+        } else {
+            false
         }
-        fn first_pattern_is_list_symbol(line: &str) -> bool {
-            let first_str = line.trim_start().get(0..2);
-            if let Some(first_str) = first_str {
-                ItemList::MARKS.iter().any(|s| *s == first_str)
-            } else {
-                false
-            }
-        }
-        !is_split_line(line) && first_pattern_is_list_symbol(line)
     }
     fn start_condition(indent: usize) -> String {
         format!("{}{}", " ".repeat(indent), "- ")
@@ -304,6 +298,26 @@ mod tests {
 
     #[test]
     fn learning_loop() {
+        let data = r#"---
+
+# 目的
+
+- TDD は何なのかがわかるようになる
+
+  - 何を目的としているものなのか？
+  - どのような手法なのか？
+  - 何が嬉しいのか？
+
+TDD が必要な理由/背景がわかる
+
+  - 何を目的としているものなのか？
+  - どのような手法なのか？
+  - 何が嬉しいのか？
+
+- TDD は何なのかがわかるようになる
+
+"#;
+        let md = Markdown::parse(data);
         let data = r#"---
 
 # 目的
@@ -495,6 +509,22 @@ mod tests {
             list.add_item(chome);
 
             assert_eq!(sut, list);
+        }
+        #[test]
+        fn 兄弟を持つリストをparseできる() {
+            let list = r#"
+- foo
+- bar
+- hoge"#;
+            let mut list = list.lines().peekable();
+            let sut = ItemList::parse(&mut list, 0);
+
+            let mut expected = ItemList::new();
+            expected.add_item(Item::new("foo"));
+            expected.add_item(Item::new("bar"));
+            expected.add_item(Item::new("hoge"));
+
+            assert_eq!(sut, expected);
         }
         #[test]
         fn 文字列から単一のリストをparseできる() {
