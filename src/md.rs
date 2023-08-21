@@ -92,7 +92,7 @@ pub struct ItemList<'a> {
     pub(crate) items: Vec<Item<'a>>,
 }
 impl<'a> ItemList<'a> {
-    const MARKS: [&'static str; 2] = ["- ", "* "];
+    const MARKS: [&'static str; 2] = ["-", "*"];
     pub fn items(&'a self) -> impl Iterator<Item = &'a Item<'a>> {
         self.items.iter()
     }
@@ -185,9 +185,18 @@ impl<'a> ItemList<'a> {
     fn is_end_loop(line: &str) -> bool {
         // 空行ではないかつ空白以外の最初の文字がMARKと異なっていれば終了
         // またsplit_lineの場合は文字が一緒なのでsplit_lineの場合も考慮する必要がある
-        let first_str = line.trim_start().get(0..1);
-        SplitLine::parse(line).is_some()
-            || (!line.is_empty() && first_str.map(|s| !["-", "*"].contains(&s)).unwrap_or(false))
+        fn is_split_line(line: &str) -> bool {
+            SplitLine::parse(line).is_some()
+        }
+        fn first_char_is_list_symbol(line: &str) -> bool {
+            let first_str = line.trim_start().get(0..1);
+            if let Some(first_str) = first_str {
+                ItemList::MARKS.iter().any(|s| *s == first_str)
+            } else {
+                false
+            }
+        }
+        is_split_line(line) || !line.is_empty() && !first_char_is_list_symbol(line)
     }
     fn start_condition(indent: usize) -> String {
         format!("{}{}", " ".repeat(indent), "- ")
