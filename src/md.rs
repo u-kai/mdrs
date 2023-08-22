@@ -145,9 +145,7 @@ impl<'a> ItemList<'a> {
                 let indent_count = Self::indent_count(line);
                 // そもそもresultにまだitemが存在しなければ当該indentが最初のitemになり，同じindentの要素をparseするようにする
                 if result.item_len() == 0 {
-                    indent = indent_count;
-                    result = Self::parse(lines, indent_count);
-                    continue;
+                    return Self::parse(lines, indent_count);
                 }
                 let line = lines.next().unwrap();
                 let mut children = Self::from_line(line, indent_count);
@@ -160,7 +158,6 @@ impl<'a> ItemList<'a> {
     fn parse_children(lines: &mut Peekable<Lines<'a>>, indent: usize) -> Self {
         Self::parse(lines, indent + 1)
     }
-
     fn is_skip(line: &str) -> bool {
         // 空行の場合はスキップ
         line.is_empty()
