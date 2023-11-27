@@ -52,7 +52,6 @@ impl<'a> Markdown<'a> {
             }
 
             if ItemList::is_item_list_line(line) {
-                println!("line {}", line);
                 if let Some(component) = Markdown::parse_list(&mut lines) {
                     components.push(component);
                     continue;
